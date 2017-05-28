@@ -380,8 +380,8 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
     minimalAuthCodeConfig(builder1);
     minimalAuthCodeConfig(builder2);
 
-    builder1.resourceOwnerIdStoreTransformer(roid -> "conn1-" + roid);
-    builder2.resourceOwnerIdStoreTransformer(roid -> "conn2-" + roid);
+    builder1.resourceOwnerIdTransformer(roid -> "conn1-" + roid);
+    builder2.resourceOwnerIdTransformer(roid -> "conn2-" + roid);
 
     final AuthorizationCodeOAuthDancer dancer1 = startDancer(builder1);
     final AuthorizationCodeOAuthDancer dancer2 = startDancer(builder2);

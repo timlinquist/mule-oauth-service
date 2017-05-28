@@ -47,7 +47,7 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
     return new DefaultClientCredentialsOAuthDancer(clientId, clientSecret, tokenUrl, scopes, encodeClientCredentialsInBody,
                                                    encoding, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParametersExtractorsExprs,
-                                                   resourceOwnerIdStoreTransformer, lockProvider, tokensStore,
+                                                   resourceOwnerIdTransformer, lockProvider, tokensStore,
                                                    httpClientFactory.get(), expressionEvaluator);
   }
 

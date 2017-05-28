@@ -48,7 +48,7 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   protected String responseExpiresInExpr = "#[payload.expires_in]";
   protected String scopes = null;
   protected Map<String, String> customParametersExtractorsExprs;
-  protected Function<String, String> resourceOwnerIdStoreTransformer = resourceOwnerId -> resourceOwnerId;
+  protected Function<String, String> resourceOwnerIdTransformer = resourceOwnerId -> resourceOwnerId;
 
   public AbstractOAuthDancerBuilder(LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
                                     HttpService httpService, MuleExpressionLanguage expressionEvaluator) {
@@ -158,8 +158,8 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   }
 
   @Override
-  public OAuthDancerBuilder<D> resourceOwnerIdStoreTransformer(Function<String, String> resourceOwnerIdStoreTransformer) {
-    this.resourceOwnerIdStoreTransformer = resourceOwnerIdStoreTransformer;
+  public OAuthDancerBuilder<D> resourceOwnerIdTransformer(Function<String, String> resourceOwnerIdTransformer) {
+    this.resourceOwnerIdTransformer = resourceOwnerIdTransformer;
     return this;
   }
 

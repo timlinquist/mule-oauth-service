@@ -56,14 +56,13 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
 
   public DefaultClientCredentialsOAuthDancer(String clientId, String clientSecret, String tokenUrl, String scopes,
                                              boolean encodeClientCredentialsInBody, Charset encoding,
-                                             String responseAccessTokenExpr,
-                                             String responseRefreshTokenExpr, String responseExpiresInExpr,
-                                             Map<String, String> customParametersExprs,
-                                             Function<String, String> resourceOwnerIdStoreTransformer, LockFactory lockProvider,
+                                             String responseAccessTokenExpr, String responseRefreshTokenExpr,
+                                             String responseExpiresInExpr, Map<String, String> customParametersExprs,
+                                             Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
                                              Map<String, DefaultResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
                                              MuleExpressionLanguage expressionEvaluator) {
     super(clientId, clientSecret, tokenUrl, encoding, scopes, responseAccessTokenExpr, responseRefreshTokenExpr,
-          responseExpiresInExpr, customParametersExprs, resourceOwnerIdStoreTransformer, lockProvider, tokensStore, httpClient,
+          responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, lockProvider, tokensStore, httpClient,
           expressionEvaluator);
     this.encodeClientCredentialsInBody = encodeClientCredentialsInBody;
   }
