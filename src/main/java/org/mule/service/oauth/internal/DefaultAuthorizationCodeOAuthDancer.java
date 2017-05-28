@@ -126,12 +126,14 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                                              String responseAccessTokenExpr, String responseRefreshTokenExpr,
                                              String responseExpiresInExpr, Supplier<Map<String, String>> customParameters,
                                              Map<String, String> customParametersExtractorsExprs,
+                                             Function<String, String> resourceOwnerIdStoreTransformer,
                                              LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
                                              HttpClient httpClient, MuleExpressionLanguage expressionEvaluator,
                                              Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback,
                                              BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback) {
     super(clientId, clientSecret, tokenUrl, encoding, scopes, responseAccessTokenExpr, responseRefreshTokenExpr,
-          responseExpiresInExpr, customParametersExtractorsExprs, lockProvider, tokensStore, httpClient, expressionEvaluator);
+          responseExpiresInExpr, customParametersExtractorsExprs, resourceOwnerIdStoreTransformer, lockProvider, tokensStore,
+          httpClient, expressionEvaluator);
 
     this.httpServer = httpServer;
     this.localCallbackUrlPath = localCallbackUrlPath;
