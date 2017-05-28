@@ -172,8 +172,9 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
                                                    localAuthorizationUrlPath, localAuthorizationUrlResourceOwnerId, state,
                                                    authorizationUrl, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParameters, customParametersExtractorsExprs,
-                                                   lockProvider, tokensStore, httpClientFactory.get(), expressionEvaluator,
-                                                   beforeDanceCallback, afterDanceCallback);
+                                                   resourceOwnerIdTransformer, lockProvider, tokensStore,
+                                                   httpClientFactory.get(), expressionEvaluator, beforeDanceCallback,
+                                                   afterDanceCallback);
   }
 
 }

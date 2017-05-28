@@ -53,11 +53,13 @@ import org.mule.runtime.http.api.server.HttpServerFactory;
 import org.mule.runtime.http.api.server.RequestHandler;
 import org.mule.runtime.http.api.server.RequestHandlerManager;
 import org.mule.runtime.http.api.server.async.HttpResponseReadyCallback;
+import org.mule.runtime.oauth.api.AuthorizationCodeOAuthDancer;
 import org.mule.runtime.oauth.api.OAuthService;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeDanceCallbackContext;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.runtime.oauth.api.builder.OAuthDancerBuilder;
+import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultOAuthService;
 import org.mule.tck.junit4.AbstractMuleContextTestCase;
 
@@ -66,9 +68,10 @@ import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
-import java.util.Optional;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.commons.io.input.ReaderInputStream;
 import org.junit.Before;
@@ -340,13 +343,7 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
     AtomicBoolean afterCallbackCalled = new AtomicBoolean(false);
     String resourceOwner = "someOwner";
 
-    AuthorizationCodeDanceCallbackContext callbackContext = new AuthorizationCodeDanceCallbackContext() {
-
-      @Override
-      public Optional<Object> getParameter(String paramKey) {
-        return empty();
-      }
-    };
+    AuthorizationCodeDanceCallbackContext callbackContext = paramKey -> empty();
 
     final OAuthAuthorizationCodeDancerBuilder builder = baseAuthCodeDancerbuilder();
     minimalAuthCodeConfig(builder);
@@ -364,6 +361,38 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
     configureRequestHandler(resourceOwner, "");
 
     assertThat(afterCallbackCalled.get(), is(true));
+  }
+
+  @Test
+  public void multipleDancersShareTokensStore() throws MalformedURLException, InitialisationException, MuleException {
+    final LockFactory lockFactory = muleContext.getRegistry().lookupObject(LockFactory.class);
+    final Map<String, Object> tokensStore = new HashMap<>();
+    final MuleExpressionLanguage el = mock(MuleExpressionLanguage.class);
+
+    final OAuthAuthorizationCodeDancerBuilder builder1 =
+        service.authorizationCodeGrantTypeDancerBuilder(lockFactory, tokensStore, el);
+    final OAuthAuthorizationCodeDancerBuilder builder2 =
+        service.authorizationCodeGrantTypeDancerBuilder(lockFactory, tokensStore, el);
+
+    builder1.clientCredentials("clientId", "clientSecret");
+    builder2.clientCredentials("clientId", "clientSecret");
+
+    minimalAuthCodeConfig(builder1);
+    minimalAuthCodeConfig(builder2);
+
+    builder1.resourceOwnerIdTransformer(roid -> "conn1-" + roid);
+    builder2.resourceOwnerIdTransformer(roid -> "conn2-" + roid);
+
+    final AuthorizationCodeOAuthDancer dancer1 = startDancer(builder1);
+    final AuthorizationCodeOAuthDancer dancer2 = startDancer(builder2);
+
+    final DefaultResourceOwnerOAuthContext contextOwnerConn1 = new DefaultResourceOwnerOAuthContext(new ReentrantLock(), "owner");
+    final DefaultResourceOwnerOAuthContext contextOwnerConn2 = new DefaultResourceOwnerOAuthContext(new ReentrantLock(), "owner");
+    tokensStore.put("conn1-owner", contextOwnerConn1);
+    tokensStore.put("conn2-owner", contextOwnerConn2);
+
+    assertThat(dancer1.getContextForResourceOwner("owner"), sameInstance(contextOwnerConn1));
+    assertThat(dancer2.getContextForResourceOwner("owner"), sameInstance(contextOwnerConn2));
   }
 
   private OAuthClientCredentialsDancerBuilder baseClientCredentialsDancerBuilder() throws RegistrationException {
@@ -384,9 +413,9 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
     return builder;
   }
 
-  private Object startDancer(final OAuthDancerBuilder builder)
+  private <D> D startDancer(final OAuthDancerBuilder<D> builder)
       throws InitialisationException, MuleException {
-    final Object dancer = builder.build();
+    final D dancer = builder.build();
     initialiseIfNeeded(dancer);
     startIfNeeded(dancer);
 

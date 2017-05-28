@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
+import java.util.function.Function;
 
 /**
  * Base implementations with behavior common to all grant-types.
@@ -69,6 +70,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   protected final String responseRefreshTokenExpr;
   protected final String responseExpiresInExpr;
   protected final Map<String, String> customParametersExtractorsExprs;
+  protected final Function<String, String> resourceOwnerIdTransformer;
 
   private final LockFactory lockProvider;
   private final Map<String, DefaultResourceOwnerOAuthContext> tokensStore;
@@ -77,9 +79,10 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
 
   protected AbstractOAuthDancer(String clientId, String clientSecret, String tokenUrl, Charset encoding, String scopes,
                                 String responseAccessTokenExpr, String responseRefreshTokenExpr, String responseExpiresInExpr,
-                                Map<String, String> customParametersExtractorsExprs, LockFactory lockProvider,
-                                Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
-                                HttpClient httpClient, MuleExpressionLanguage expressionEvaluator) {
+                                Map<String, String> customParametersExtractorsExprs,
+                                Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
+                                Map<String, DefaultResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
+                                MuleExpressionLanguage expressionEvaluator) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.tokenUrl = tokenUrl;
@@ -89,6 +92,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     this.responseRefreshTokenExpr = responseRefreshTokenExpr;
     this.responseExpiresInExpr = responseExpiresInExpr;
     this.customParametersExtractorsExprs = customParametersExtractorsExprs;
+    this.resourceOwnerIdTransformer = resourceOwnerIdTransformer;
 
     this.lockProvider = lockProvider;
     this.tokensStore = tokensStore;
@@ -221,7 +225,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     DefaultResourceOwnerOAuthContext context = (DefaultResourceOwnerOAuthContext) getContextForResourceOwner(resourceOwner);
     context.getRefreshUserOAuthContextLock().lock();
     try {
-      tokensStore.remove(resourceOwner);
+      tokensStore.remove(resourceOwnerIdTransformer.apply(resourceOwner));
     } finally {
       context.getRefreshUserOAuthContextLock().unlock();
     }
@@ -235,23 +239,25 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
    * @return oauth state
    */
   public ResourceOwnerOAuthContext getContextForResourceOwner(final String resourceOwnerId) {
+    final String transformedResourceOwnerId = resourceOwnerIdTransformer.apply(resourceOwnerId);
+
     DefaultResourceOwnerOAuthContext resourceOwnerOAuthContext = null;
-    if (!tokensStore.containsKey(resourceOwnerId)) {
+    if (!tokensStore.containsKey(transformedResourceOwnerId)) {
       final Lock lock = lockProvider.createLock(toString() + "-config-oauth-context");
       lock.lock();
       try {
-        if (!tokensStore.containsKey(resourceOwnerId)) {
+        if (!tokensStore.containsKey(transformedResourceOwnerId)) {
           resourceOwnerOAuthContext =
-              new DefaultResourceOwnerOAuthContext(createLockForResourceOwner(resourceOwnerId), resourceOwnerId);
-          tokensStore.put(resourceOwnerId, resourceOwnerOAuthContext);
+              new DefaultResourceOwnerOAuthContext(createLockForResourceOwner(transformedResourceOwnerId), resourceOwnerId);
+          tokensStore.put(transformedResourceOwnerId, resourceOwnerOAuthContext);
         }
       } finally {
         lock.unlock();
       }
     }
     if (resourceOwnerOAuthContext == null) {
-      resourceOwnerOAuthContext = tokensStore.get(resourceOwnerId);
-      resourceOwnerOAuthContext.setRefreshUserOAuthContextLock(createLockForResourceOwner(resourceOwnerId));
+      resourceOwnerOAuthContext = tokensStore.get(transformedResourceOwnerId);
+      resourceOwnerOAuthContext.setRefreshUserOAuthContextLock(createLockForResourceOwner(transformedResourceOwnerId));
     }
     return resourceOwnerOAuthContext;
   }
@@ -269,7 +275,8 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     final Lock resourceOwnerContextLock = resourceOwnerOAuthContext.getRefreshUserOAuthContextLock();
     resourceOwnerContextLock.lock();
     try {
-      tokensStore.put(resourceOwnerOAuthContext.getResourceOwnerId(), resourceOwnerOAuthContext);
+      tokensStore.put(resourceOwnerIdTransformer.apply(resourceOwnerOAuthContext.getResourceOwnerId()),
+                      resourceOwnerOAuthContext);
     } finally {
       resourceOwnerContextLock.unlock();
     }

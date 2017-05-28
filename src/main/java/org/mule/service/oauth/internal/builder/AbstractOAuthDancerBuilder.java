@@ -15,8 +15,8 @@ import org.mule.runtime.api.tls.TlsContextFactory;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.client.HttpClientConfiguration;
-import org.mule.runtime.http.api.client.HttpRequestAuthentication;
 import org.mule.runtime.http.api.client.HttpClientConfiguration.Builder;
+import org.mule.runtime.http.api.client.HttpRequestAuthentication;
 import org.mule.runtime.http.api.client.async.ResponseHandler;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.response.HttpResponse;
@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilder<D> {
@@ -47,6 +48,7 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   protected String responseExpiresInExpr = "#[payload.expires_in]";
   protected String scopes = null;
   protected Map<String, String> customParametersExtractorsExprs;
+  protected Function<String, String> resourceOwnerIdTransformer = resourceOwnerId -> resourceOwnerId;
 
   public AbstractOAuthDancerBuilder(LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
                                     HttpService httpService, MuleExpressionLanguage expressionEvaluator) {
@@ -152,6 +154,12 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   @Override
   public OAuthDancerBuilder customParametersExtractorsExprs(Map<String, String> customParamsExtractorsExprs) {
     this.customParametersExtractorsExprs = customParamsExtractorsExprs;
+    return this;
+  }
+
+  @Override
+  public OAuthDancerBuilder<D> resourceOwnerIdTransformer(Function<String, String> resourceOwnerIdTransformer) {
+    this.resourceOwnerIdTransformer = resourceOwnerIdTransformer;
     return this;
   }
 

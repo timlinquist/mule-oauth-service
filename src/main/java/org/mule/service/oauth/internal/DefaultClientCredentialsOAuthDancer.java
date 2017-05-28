@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 
@@ -55,13 +56,14 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
 
   public DefaultClientCredentialsOAuthDancer(String clientId, String clientSecret, String tokenUrl, String scopes,
                                              boolean encodeClientCredentialsInBody, Charset encoding,
-                                             String responseAccessTokenExpr,
-                                             String responseRefreshTokenExpr, String responseExpiresInExpr,
-                                             Map<String, String> customParametersExprs, LockFactory lockProvider,
+                                             String responseAccessTokenExpr, String responseRefreshTokenExpr,
+                                             String responseExpiresInExpr, Map<String, String> customParametersExprs,
+                                             Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
                                              Map<String, DefaultResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
                                              MuleExpressionLanguage expressionEvaluator) {
     super(clientId, clientSecret, tokenUrl, encoding, scopes, responseAccessTokenExpr, responseRefreshTokenExpr,
-          responseExpiresInExpr, customParametersExprs, lockProvider, tokensStore, httpClient, expressionEvaluator);
+          responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, lockProvider, tokensStore, httpClient,
+          expressionEvaluator);
     this.encodeClientCredentialsInBody = encodeClientCredentialsInBody;
   }
 
