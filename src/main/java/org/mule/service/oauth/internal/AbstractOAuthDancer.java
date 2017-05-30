@@ -16,7 +16,6 @@ import static org.mule.runtime.http.api.HttpHeaders.Names.CONTENT_TYPE;
 import static org.mule.runtime.http.api.HttpHeaders.Values.APPLICATION_X_WWW_FORM_URLENCODED;
 import static org.mule.runtime.http.api.utils.HttpEncoderDecoderUtils.decodeUrlEncodedBody;
 import static org.mule.runtime.http.api.utils.HttpEncoderDecoderUtils.encodeString;
-
 import org.mule.runtime.api.el.BindingContext;
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleException;
@@ -27,7 +26,6 @@ import org.mule.runtime.api.metadata.DataType;
 import org.mule.runtime.api.metadata.MediaType;
 import org.mule.runtime.api.metadata.TypedValue;
 import org.mule.runtime.core.util.IOUtils;
-import org.mule.runtime.core.util.MapUtils;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.domain.ParameterMap;
 import org.mule.runtime.http.api.domain.entity.ByteArrayHttpEntity;
@@ -156,7 +154,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
       }
       tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, headers, responseContentType));
 
-      if (!MapUtils.isEmpty(customParametersExtractorsExprs)) {
+      if (customParametersExtractorsExprs != null && customParametersExtractorsExprs.size() != 0) {
         Map<String, Object> customParams = new HashMap<>();
         for (Entry<String, String> customParamExpr : customParametersExtractorsExprs.entrySet()) {
           customParams.put(customParamExpr.getKey(),
