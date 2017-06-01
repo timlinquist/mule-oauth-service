@@ -8,8 +8,8 @@ package org.mule.service.oauth.internal.authorizationcode;
 
 import static java.lang.String.format;
 import static java.net.URLEncoder.encode;
-import static org.apache.commons.lang.StringUtils.isNotBlank;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
+import static org.mule.runtime.core.util.StringUtils.isBlank;
 import static org.mule.service.oauth.internal.OAuthConstants.CLIENT_ID_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.REDIRECT_URI_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.SCOPE_PARAMETER;
@@ -81,9 +81,9 @@ public class AuthorizationRequestUrlBuilder {
    * @return the authorization url with all the query parameters from the config.
    */
   public String buildUrl() {
-    checkArgument(isNotBlank(clientId), "clientId cannot be blank");
-    checkArgument(isNotBlank(clientSecret), "clientSecret cannot be blank");
-    checkArgument(isNotBlank(authorizationUrl), "authorizationUrl cannot be blank");
+    checkArgument(!isBlank(clientId), "clientId cannot be blank");
+    checkArgument(!isBlank(clientSecret), "clientSecret cannot be blank");
+    checkArgument(!isBlank(authorizationUrl), "authorizationUrl cannot be blank");
     checkArgument(customParameters != null, "customParameters cannot be null");
     return buildAuthorizeUrl();
   }
@@ -95,11 +95,11 @@ public class AuthorizationRequestUrlBuilder {
     urlBuilder.append("?").append("response_type=code&").append(CLIENT_ID_PARAMETER + "=").append(clientId);
 
     try {
-      if (isNotBlank(scope)) {
+      if (!isBlank(scope)) {
         urlBuilder.append(format(ADDED_PARAMETER_TEMPLATE, SCOPE_PARAMETER))
             .append(encode(scope, encoding.name()));
       }
-      if (isNotBlank(state)) {
+      if (!isBlank(state)) {
         urlBuilder.append(format(ADDED_PARAMETER_TEMPLATE, STATE_PARAMETER))
             .append(encode(state, encoding.name()));
       }
