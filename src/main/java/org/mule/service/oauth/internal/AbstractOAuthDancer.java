@@ -154,7 +154,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
       }
       tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, headers, responseContentType));
 
-      if (customParametersExtractorsExprs != null && customParametersExtractorsExprs.size() != 0) {
+      if (customParametersExtractorsExprs != null && !customParametersExtractorsExprs.isEmpty()) {
         Map<String, Object> customParams = new HashMap<>();
         for (Entry<String, String> customParamExpr : customParametersExtractorsExprs.entrySet()) {
           customParams.put(customParamExpr.getKey(),
