@@ -8,6 +8,8 @@ package org.mule.service.oauth.internal.state;
 
 import static java.util.Collections.unmodifiableMap;
 
+import org.mule.runtime.core.api.util.StringUtils;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,7 +53,7 @@ public class TokenResponse {
   }
 
   private boolean isEmpty(String value) {
-    return value == null || org.mule.runtime.core.util.StringUtils.isEmpty(value) || "null".equals(value);
+    return value == null || StringUtils.isEmpty(value) || "null".equals(value);
   }
 
 }

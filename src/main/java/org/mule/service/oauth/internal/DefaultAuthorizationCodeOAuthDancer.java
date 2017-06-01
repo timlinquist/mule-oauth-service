@@ -14,6 +14,7 @@ import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
 import static org.mule.runtime.api.metadata.MediaType.parse;
+import static org.mule.runtime.core.api.util.StringUtils.isBlank;
 import static org.mule.runtime.http.api.HttpConstants.HttpStatus.BAD_REQUEST;
 import static org.mule.runtime.http.api.HttpConstants.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.mule.runtime.http.api.HttpConstants.HttpStatus.MOVED_TEMPORARILY;
@@ -39,7 +40,6 @@ import static org.mule.service.oauth.internal.OAuthConstants.REDIRECT_URI_PARAME
 import static org.mule.service.oauth.internal.OAuthConstants.REFRESH_TOKEN_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.STATE_PARAMETER;
 import static org.slf4j.LoggerFactory.getLogger;
-
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.exception.MuleRuntimeException;
@@ -48,7 +48,7 @@ import org.mule.runtime.api.lifecycle.Lifecycle;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.metadata.MediaType;
 import org.mule.runtime.core.api.DefaultMuleException;
-import org.mule.runtime.core.util.StringUtils;
+import org.mule.runtime.core.api.util.StringUtils;
 import org.mule.runtime.http.api.HttpConstants;
 import org.mule.runtime.http.api.HttpConstants.HttpStatus;
 import org.mule.runtime.http.api.HttpConstants.Method;
@@ -329,7 +329,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
   }
 
   private static boolean isEmpty(String value) {
-    return value == null || org.mule.runtime.core.util.StringUtils.isEmpty(value) || "null".equals(value);
+    return value == null || StringUtils.isEmpty(value) || "null".equals(value);
   }
 
   private RequestHandler createLocalAuthorizationUrlListener() {
@@ -505,7 +505,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug("New OAuth State for resourceOwnerId %s is: accessToken(%s), refreshToken(%s), expiresIn(%s), state(%s)",
                    resourceOwnerOAuthContext.getResourceOwnerId(), resourceOwnerOAuthContext.getAccessToken(),
-                   StringUtils.isBlank(resourceOwnerOAuthContext.getRefreshToken()) ? "Not issued"
+                   isBlank(resourceOwnerOAuthContext.getRefreshToken()) ? "Not issued"
                        : resourceOwnerOAuthContext.getRefreshToken(),
                    resourceOwnerOAuthContext.getExpiresIn(), resourceOwnerOAuthContext.getState());
     }
