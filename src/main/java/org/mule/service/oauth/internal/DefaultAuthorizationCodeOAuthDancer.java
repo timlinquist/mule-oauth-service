@@ -48,6 +48,7 @@ import org.mule.runtime.api.lifecycle.Lifecycle;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.metadata.MediaType;
 import org.mule.runtime.core.api.DefaultMuleException;
+import org.mule.runtime.core.api.util.IOUtils;
 import org.mule.runtime.core.api.util.StringUtils;
 import org.mule.runtime.http.api.HttpConstants;
 import org.mule.runtime.http.api.HttpConstants.HttpStatus;
@@ -56,7 +57,6 @@ import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.domain.ParameterMap;
 import org.mule.runtime.http.api.domain.entity.ByteArrayHttpEntity;
 import org.mule.runtime.http.api.domain.entity.EmptyHttpEntity;
-import org.mule.runtime.http.api.domain.entity.InputStreamHttpEntity;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.response.HttpResponse;
 import org.mule.runtime.http.api.domain.message.response.HttpResponseBuilder;
@@ -88,7 +88,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 
 /**
@@ -372,12 +371,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
   }
 
   private String readBody(final HttpRequest request) {
-    try {
-      InputStreamHttpEntity inputStreamEntity = request.getInputStreamEntity();
-      return inputStreamEntity != null ? IOUtils.toString(inputStreamEntity.getInputStream()) : "";
-    } catch (IOException e) {
-      throw new MuleRuntimeException(e);
-    }
+    return IOUtils.toString(request.getEntity().getContent());
   }
 
   private ParameterMap readHeaders(final HttpRequest request) {
