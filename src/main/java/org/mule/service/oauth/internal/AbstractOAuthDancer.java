@@ -6,6 +6,7 @@
  */
 package org.mule.service.oauth.internal;
 
+import static java.util.Collections.singletonMap;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.mule.runtime.api.metadata.DataType.STRING;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
@@ -27,9 +28,9 @@ import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.metadata.DataType;
 import org.mule.runtime.api.metadata.MediaType;
 import org.mule.runtime.api.metadata.TypedValue;
+import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.core.api.util.IOUtils;
 import org.mule.runtime.http.api.client.HttpClient;
-import org.mule.runtime.http.api.domain.ParameterMap;
 import org.mule.runtime.http.api.domain.entity.ByteArrayHttpEntity;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.request.HttpRequestBuilder;
@@ -42,7 +43,6 @@ import org.mule.service.oauth.internal.state.TokenResponse;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -127,7 +127,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
 
       MediaType responseContentType =
           response.getHeaderValueIgnoreCase(CONTENT_TYPE) != null ? parse(response.getHeaderValueIgnoreCase(CONTENT_TYPE)) : ANY;
-      ParameterMap headers = new ParameterMap();
+      MultiMap<String, String> headers = new MultiMap<>();
       for (String headerName : response.getHeaderNames()) {
         headers.put(headerName, response.getHeaderValues(headerName));
       }
@@ -172,7 +172,8 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     }
   }
 
-  protected <T> T resolveExpression(String expr, Object body, ParameterMap headers, MediaType responseContentType) {
+  protected <T> T resolveExpression(String expr, Object body, MultiMap<String, String> headers,
+                                    MediaType responseContentType) {
     if (expr == null) {
       return null;
     } else if (!expressionEvaluator.isExpression(expr)) {
@@ -183,7 +184,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
                       new TypedValue(body, DataType.builder().fromObject(body)
                           .mediaType(responseContentType).build()))
 
-          .addBinding("attributes", new TypedValue(Collections.singletonMap("headers", headers.toImmutableParameterMap()),
+          .addBinding("attributes", new TypedValue(singletonMap("headers", headers.toImmutableMultiMap()),
                                                    DataType.fromType(Map.class)))
           .addBinding("dataType",
                       new TypedValue(DataType.builder().fromObject(body).mediaType(responseContentType)
@@ -194,16 +195,16 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     }
   }
 
-  protected <T> T resolveExpression(String expr, Object body, ParameterMap headers, ParameterMap queryParams,
-                                    MediaType responseContentType) {
+  protected <T> T resolveExpression(String expr, Object body, MultiMap<String, String> headers,
+                                    MultiMap<String, String> queryParams, MediaType responseContentType) {
     if (expr == null) {
       return null;
     } else if (!expressionEvaluator.isExpression(expr)) {
       return (T) expr;
     } else {
       Map<Object, Object> attributes = new HashMap<>(2);
-      attributes.put("headers", headers.toImmutableParameterMap());
-      attributes.put("queryParams", queryParams.toImmutableParameterMap());
+      attributes.put("headers", headers.toImmutableMultiMap());
+      attributes.put("queryParams", queryParams.toImmutableMultiMap());
 
       BindingContext resultContext = BindingContext.builder()
           .addBinding("payload",
