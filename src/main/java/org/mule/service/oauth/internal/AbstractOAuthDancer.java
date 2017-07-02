@@ -15,7 +15,6 @@ import static org.mule.runtime.http.api.HttpConstants.Method.POST;
 import static org.mule.runtime.http.api.HttpHeaders.Names.AUTHORIZATION;
 import static org.mule.runtime.http.api.HttpHeaders.Names.CONTENT_TYPE;
 import static org.mule.runtime.http.api.HttpHeaders.Values.APPLICATION_X_WWW_FORM_URLENCODED;
-import static org.mule.runtime.http.api.utils.HttpEncoderDecoderUtils.decodeUrlEncodedBody;
 import static org.mule.runtime.http.api.utils.HttpEncoderDecoderUtils.encodeString;
 import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT_RESOURCE_OWNER_ID;
 import org.mule.runtime.api.el.BindingContext;
@@ -133,11 +132,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
         headers.put(headerName, response.getHeaderValues(headerName));
       }
 
-      String readBody = IOUtils.toString(((InputStreamHttpEntity) response.getEntity()).getInputStream());
-      Object body = readBody;
-      if (responseContentType.withoutParameters().matches(APPLICATION_X_WWW_FORM_URLENCODED)) {
-        body = decodeUrlEncodedBody(readBody, responseContentType.getCharset().orElse(encoding));
-      }
+      String body = IOUtils.toString(((InputStreamHttpEntity) response.getEntity()).getInputStream());
 
       if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
         throw new TokenUrlResponseException(tokenUrl);
