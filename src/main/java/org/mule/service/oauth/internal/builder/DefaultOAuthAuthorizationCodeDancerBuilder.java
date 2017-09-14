@@ -16,7 +16,7 @@ import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.tls.TlsContextFactory;
-import org.mule.runtime.core.api.scheduler.SchedulerService;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.http.api.server.HttpServer;
 import org.mule.runtime.http.api.server.HttpServerConfiguration;

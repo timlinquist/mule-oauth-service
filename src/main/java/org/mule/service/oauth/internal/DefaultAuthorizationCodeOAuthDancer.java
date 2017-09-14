@@ -47,7 +47,7 @@ import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.lifecycle.Lifecycle;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.metadata.MediaType;
-import org.mule.runtime.core.api.DefaultMuleException;
+import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.core.api.util.IOUtils;
 import org.mule.runtime.core.api.util.StringUtils;
 import org.mule.runtime.http.api.HttpConstants;

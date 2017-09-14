@@ -8,7 +8,7 @@ package org.mule.service.oauth.internal;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
-import org.mule.runtime.core.api.scheduler.SchedulerService;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.oauth.api.OAuthService;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
