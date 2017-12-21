@@ -111,13 +111,7 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
 
   @Override
   public OAuthDancerBuilder tokenUrl(String tokenUrl, TlsContextFactory tlsContextFactory) {
-    this.tokenUrl = tokenUrl;
-    this.httpClientFactory = () -> {
-      final Builder clientConfigBuilder =
-          new HttpClientConfiguration.Builder().setName(format("oauthToken.requester[%s]", tokenUrl));
-      clientConfigBuilder.setTlsContextFactory(tlsContextFactory);
-      return httpService.getClientFactory().create(clientConfigBuilder.build());
-    };
+    tokenUrl(tokenUrl, tlsContextFactory, null);
     return this;
   }
 
