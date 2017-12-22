@@ -110,6 +110,12 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   }
 
   @Override
+  public OAuthDancerBuilder<D> tokenUrl(String tokenUrl, ProxyConfig proxyConfig) {
+    tokenUrl(tokenUrl, null, proxyConfig);
+    return this;
+  }
+
+  @Override
   public OAuthDancerBuilder tokenUrl(String tokenUrl, TlsContextFactory tlsContextFactory) {
     tokenUrl(tokenUrl, tlsContextFactory, null);
     return this;
