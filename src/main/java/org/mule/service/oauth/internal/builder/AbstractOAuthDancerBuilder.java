@@ -17,6 +17,7 @@ import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.client.HttpClientConfiguration;
 import org.mule.runtime.http.api.client.HttpClientConfiguration.Builder;
 import org.mule.runtime.http.api.client.auth.HttpAuthentication;
+import org.mule.runtime.http.api.client.proxy.ProxyConfig;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.response.HttpResponse;
 import org.mule.runtime.oauth.api.builder.OAuthDancerBuilder;
@@ -109,12 +110,25 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   }
 
   @Override
+  public OAuthDancerBuilder<D> tokenUrl(String tokenUrl, ProxyConfig proxyConfig) {
+    tokenUrl(tokenUrl, null, proxyConfig);
+    return this;
+  }
+
+  @Override
   public OAuthDancerBuilder tokenUrl(String tokenUrl, TlsContextFactory tlsContextFactory) {
+    tokenUrl(tokenUrl, tlsContextFactory, null);
+    return this;
+  }
+
+  @Override
+  public OAuthDancerBuilder<D> tokenUrl(String tokenUrl, TlsContextFactory tlsContextFactory, ProxyConfig proxyConfig) {
     this.tokenUrl = tokenUrl;
     this.httpClientFactory = () -> {
       final Builder clientConfigBuilder =
           new HttpClientConfiguration.Builder().setName(format("oauthToken.requester[%s]", tokenUrl));
       clientConfigBuilder.setTlsContextFactory(tlsContextFactory);
+      clientConfigBuilder.setProxyConfig(proxyConfig);
       return httpService.getClientFactory().create(clientConfigBuilder.build());
     };
     return this;
