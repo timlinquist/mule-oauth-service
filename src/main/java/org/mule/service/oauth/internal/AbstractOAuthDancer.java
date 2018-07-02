@@ -125,8 +125,8 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
       // TODO MULE-11272 Support doing non-blocking requests
       final HttpResponse response = httpClient.send(requestBuilder.build(), TOKEN_REQUEST_TIMEOUT_MILLIS, true, null);
 
-      MediaType responseContentType =
-          response.getHeaderValueIgnoreCase(CONTENT_TYPE) != null ? parse(response.getHeaderValueIgnoreCase(CONTENT_TYPE)) : ANY;
+      String contentType = response.getHeaderValue(CONTENT_TYPE);
+      MediaType responseContentType = contentType != null ? parse(contentType) : ANY;
 
       String body = IOUtils.toString(response.getEntity().getContent());
 
