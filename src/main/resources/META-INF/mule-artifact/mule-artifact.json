@@ -1,9 +1,13 @@
 {
   "name": "OAUTH service",
-  "minMuleVersion": "4.2.0-SNAPSHOT",
+  "minMuleVersion": "4.2.0",
   "requiredProduct": "MULE",
-  "serviceProviderClassName": "org.mule.service.oauth.provider.OAuthServiceProvider",
-  "satisfiedServiceClassName": ["org.mule.runtime.oauth.api.OAuthService"],
+  "contracts": [
+    {
+      "serviceProviderClassName": "org.mule.service.oauth.provider.OAuthServiceProvider",
+      "satisfiedServiceClassName": "org.mule.runtime.oauth.api.OAuthService"
+    }
+  ],
   "classLoaderModelLoaderDescriptor": {
     "id": "mule",
     "attributes": {}
