@@ -6,16 +6,12 @@
  */
 package org.mule.service.oauth.provider;
 
-import static java.util.Collections.singletonList;
-
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.service.ServiceDefinition;
 import org.mule.runtime.api.service.ServiceProvider;
-import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.oauth.api.OAuthService;
 import org.mule.service.oauth.internal.DefaultOAuthService;
-
-import java.util.List;
 
 import javax.inject.Inject;
 
@@ -28,10 +24,10 @@ public class OAuthServiceProvider implements ServiceProvider {
   private SchedulerService schedulerService;
 
   @Override
-  public List<ServiceDefinition> providedServices() {
+  public ServiceDefinition getServiceDefinition() {
     DefaultOAuthService service = new DefaultOAuthService(httpService, schedulerService);
     ServiceDefinition serviceDefinition = new ServiceDefinition(OAuthService.class, service);
 
-    return singletonList(serviceDefinition);
+    return serviceDefinition;
   }
 }
