@@ -11,10 +11,12 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static java.util.Optional.empty;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.rules.ExpectedException.none;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
@@ -23,6 +25,7 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.initialiseIfNeeded;
@@ -52,18 +55,22 @@ import org.mule.runtime.http.api.server.RequestHandler;
 import org.mule.runtime.http.api.server.RequestHandlerManager;
 import org.mule.runtime.http.api.server.async.HttpResponseReadyCallback;
 import org.mule.runtime.oauth.api.AuthorizationCodeOAuthDancer;
+import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.OAuthService;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeDanceCallbackContext;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.runtime.oauth.api.builder.OAuthDancerBuilder;
+import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultOAuthService;
 import org.mule.tck.junit4.AbstractMuleContextTestCase;
 
 import org.apache.commons.io.input.ReaderInputStream;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
@@ -88,6 +95,9 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
 
   @Inject
   private LockFactory lockFactory;
+
+  @Rule
+  public ExpectedException expected = none();
 
   public DancerConfigTestCase() {
     setStartContext(true);
@@ -130,11 +140,44 @@ public class DancerConfigTestCase extends AbstractMuleContextTestCase {
     final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
     builder.tokenUrl("http://host/token");
 
-    Object minimalDancer = startDancer(builder);
+    ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
     verify(httpClient).start();
 
     stopIfNeeded(minimalDancer);
     verify(httpClient).stop();
+  }
+
+  @Test
+  public void clientCredentialsTokenUrlFailsDuringAppStartup() throws Exception {
+    final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
+    builder.tokenUrl("http://host/token");
+
+    reset(httpClient);
+    when(httpClient.send(any(), anyInt(), anyBoolean(), any())).thenThrow(new IOException("It failed!"));
+
+    ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
+
+    expected.expectCause(instanceOf(TokenUrlResponseException.class));
+    minimalDancer.accessToken().get();
+  }
+
+  @Test
+  public void accessTokenNotRetrieve() throws Exception {
+    final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
+    builder.tokenUrl("http://host/token");
+
+    reset(httpClient);
+    final HttpResponse httpResponse = mock(HttpResponse.class);
+    final InputStreamHttpEntity httpEntity = mock(InputStreamHttpEntity.class);
+    when(httpEntity.getContent()).thenReturn(new ReaderInputStream(new StringReader("")));
+    when(httpResponse.getEntity()).thenReturn(httpEntity);
+    when(httpResponse.getStatusCode()).thenReturn(403);
+    when(httpClient.send(any(), anyInt(), anyBoolean(), any())).thenReturn(httpResponse);
+
+    ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
+
+    expected.expectCause(instanceOf(TokenUrlResponseException.class));
+    minimalDancer.accessToken().get();
   }
 
   @Test
