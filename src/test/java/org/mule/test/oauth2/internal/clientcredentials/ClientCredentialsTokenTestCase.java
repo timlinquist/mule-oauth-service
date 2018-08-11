@@ -15,6 +15,8 @@ import static org.hamcrest.text.IsEqualIgnoringCase.equalToIgnoringCase;
 import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,7 +32,7 @@ import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.client.HttpClientFactory;
-import org.mule.runtime.http.api.client.HttpRequestOptions;
+import org.mule.runtime.http.api.client.auth.HttpAuthentication;
 import org.mule.runtime.http.api.domain.entity.InputStreamHttpEntity;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.response.HttpResponse;
@@ -84,7 +86,7 @@ public class ClientCredentialsTokenTestCase extends AbstractMuleContextTestCase 
     final InputStreamHttpEntity httpEntity = mock(InputStreamHttpEntity.class);
     when(httpEntity.getContent()).thenReturn(new ReaderInputStream(new StringReader("")));
     when(httpResponse.getEntity()).thenReturn(httpEntity);
-    when(httpClient.send(any(), any())).thenReturn(httpResponse);
+    when(httpClient.send(any(), anyInt(), anyBoolean(), any(HttpAuthentication.class))).thenReturn(httpResponse);
   }
 
   @Test
@@ -96,7 +98,7 @@ public class ClientCredentialsTokenTestCase extends AbstractMuleContextTestCase 
     ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
-    verify(httpClient).send(requestCaptor.capture(), any(HttpRequestOptions.class));
+    verify(httpClient).send(requestCaptor.capture(), anyInt(), anyBoolean(), any(HttpAuthentication.class));
 
     assertThat(requestCaptor.getValue().getHeaderValue(AUTHORIZATION), is("Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="));
 
@@ -116,7 +118,7 @@ public class ClientCredentialsTokenTestCase extends AbstractMuleContextTestCase 
     ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
-    verify(httpClient).send(requestCaptor.capture(), any(HttpRequestOptions.class));
+    verify(httpClient).send(requestCaptor.capture(), anyInt(), anyBoolean(), any(HttpAuthentication.class));
 
     assertThat(requestCaptor.getValue().getHeaderNames(), not(hasItem(equalToIgnoringCase(AUTHORIZATION))));
 
