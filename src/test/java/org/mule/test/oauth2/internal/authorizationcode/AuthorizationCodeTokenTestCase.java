@@ -70,6 +70,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.localCallback(httpServer, "/localCallback");
     builder.localAuthorizationUrlPath("/auth");
     builder.clientCredentials("Aladdin", "open sesame");
+    builder.encodeClientCredentialsInBody(false);
 
     AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
@@ -94,7 +95,6 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.localCallback(httpServer, "/localCallback");
     builder.localAuthorizationUrlPath("/auth");
     builder.clientCredentials("Aladdin", "open sesame");
-    builder.encodeClientCredentialsInBody(true);
 
     AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
@@ -128,6 +128,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.tokenUrl("http://host/token");
     builder.authorizationUrl("http://host/auth");
     builder.clientCredentials("Aladdin", "open sesame");
+    builder.encodeClientCredentialsInBody(false);
 
     AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null);
@@ -149,7 +150,6 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.tokenUrl("http://host/token");
     builder.authorizationUrl("http://host/auth");
     builder.clientCredentials("Aladdin", "open sesame");
-    builder.encodeClientCredentialsInBody(true);
 
     AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null);
