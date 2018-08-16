@@ -10,6 +10,7 @@ import static java.lang.String.format;
 import static java.lang.Thread.currentThread;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
+import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT_RESOURCE_OWNER_ID;
 import static org.mule.service.oauth.internal.OAuthConstants.GRANT_TYPE_CLIENT_CREDENTIALS;
 import static org.mule.service.oauth.internal.OAuthConstants.GRANT_TYPE_PARAMETER;
@@ -28,7 +29,6 @@ import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
 import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
-import org.mule.service.oauth.internal.state.TokenResponse;
 
 import org.slf4j.Logger;
 
@@ -121,29 +121,24 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
     }
     String authorization = handleClientCredentials(formData, encodeClientCredentialsInBody);
 
-    try {
-      TokenResponse tokenResponse = invokeTokenUrl(tokenUrl, formData, authorization, false, encoding);
+    return invokeTokenUrl(tokenUrl, formData, authorization, false, encoding).thenAccept(tokenResponse -> {
+      withContextClassLoader(DefaultClientCredentialsOAuthDancer.class.getClassLoader(), () -> {
+        if (LOGGER.isDebugEnabled()) {
+          LOGGER.debug("Retrieved access token, refresh token and expires from token url are: %s, %s, %s",
+                       tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), tokenResponse.getExpiresIn());
+        }
 
-      if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("Retrieved access token, refresh token and expires from token url are: %s, %s, %s",
-                     tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), tokenResponse.getExpiresIn());
-      }
+        final DefaultResourceOwnerOAuthContext defaultUserState = (DefaultResourceOwnerOAuthContext) getContext();
+        defaultUserState.setAccessToken(tokenResponse.getAccessToken());
+        defaultUserState.setExpiresIn(tokenResponse.getExpiresIn());
+        for (Entry<String, Object> customResponseParameterEntry : tokenResponse.getCustomResponseParameters().entrySet()) {
+          defaultUserState.getTokenResponseParameters().put(customResponseParameterEntry.getKey(),
+                                                            customResponseParameterEntry.getValue());
+        }
 
-      final DefaultResourceOwnerOAuthContext defaultUserState = (DefaultResourceOwnerOAuthContext) getContext();
-      defaultUserState.setAccessToken(tokenResponse.getAccessToken());
-      defaultUserState.setExpiresIn(tokenResponse.getExpiresIn());
-      for (Entry<String, Object> customResponseParameterEntry : tokenResponse.getCustomResponseParameters().entrySet()) {
-        defaultUserState.getTokenResponseParameters().put(customResponseParameterEntry.getKey(),
-                                                          customResponseParameterEntry.getValue());
-      }
-
-      updateResourceOwnerOAuthContext(defaultUserState);
-      return completedFuture(null);
-    } catch (TokenUrlResponseException | TokenNotFoundException e) {
-      final CompletableFuture<Void> exceptionFuture = new CompletableFuture<>();
-      exceptionFuture.completeExceptionally(e);
-      return exceptionFuture;
-    }
+        updateResourceOwnerOAuthContext(defaultUserState);
+      });
+    });
   }
 
   @Override
