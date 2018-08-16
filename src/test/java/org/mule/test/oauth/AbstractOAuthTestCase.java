@@ -6,6 +6,7 @@
  */
 package org.mule.test.oauth;
 
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
@@ -79,7 +80,8 @@ public abstract class AbstractOAuthTestCase extends AbstractMuleContextTestCase 
     final InputStreamHttpEntity httpEntity = mock(InputStreamHttpEntity.class);
     when(httpEntity.getContent()).thenReturn(new ReaderInputStream(new StringReader("")));
     when(httpResponse.getEntity()).thenReturn(httpEntity);
-    when(httpClient.send(any(), anyInt(), anyBoolean(), any(HttpAuthentication.class))).thenReturn(httpResponse);
+    when(httpClient.sendAsync(any(), anyInt(), anyBoolean(), any(HttpAuthentication.class)))
+        .thenReturn(completedFuture(httpResponse));
   }
 
   protected OAuthClientCredentialsDancerBuilder baseClientCredentialsDancerBuilder() {

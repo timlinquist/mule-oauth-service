@@ -13,6 +13,7 @@ import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.mule.runtime.api.metadata.DataType.STRING;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
 import static org.mule.runtime.api.metadata.MediaType.parse;
+import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.http.api.HttpConstants.HttpStatus.BAD_REQUEST;
 import static org.mule.runtime.http.api.HttpConstants.Method.POST;
 import static org.mule.runtime.http.api.HttpHeaders.Names.AUTHORIZATION;
@@ -38,7 +39,6 @@ import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.domain.entity.ByteArrayHttpEntity;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.request.HttpRequestBuilder;
-import org.mule.runtime.http.api.domain.message.response.HttpResponse;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
 import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
@@ -50,7 +50,8 @@ import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Function;
 
@@ -134,60 +135,69 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     }
   }
 
-  protected TokenResponse invokeTokenUrl(String tokenUrl, Map<String, String> tokenRequestFormToSend, String authorization,
-                                         boolean retrieveRefreshToken, Charset encoding)
-      throws TokenUrlResponseException, TokenNotFoundException {
-    try {
-      final HttpRequestBuilder requestBuilder = HttpRequest.builder()
-          .uri(tokenUrl).method(POST.name())
-          .entity(new ByteArrayHttpEntity(encodeString(tokenRequestFormToSend, encoding).getBytes()))
-          .addHeader(CONTENT_TYPE, APPLICATION_X_WWW_FORM_URLENCODED.toRfcString());
+  protected CompletableFuture<TokenResponse> invokeTokenUrl(String tokenUrl, Map<String, String> tokenRequestFormToSend,
+                                                            String authorization,
+                                                            boolean retrieveRefreshToken, Charset encoding) {
+    final HttpRequestBuilder requestBuilder = HttpRequest.builder()
+        .uri(tokenUrl).method(POST.name())
+        .entity(new ByteArrayHttpEntity(encodeString(tokenRequestFormToSend, encoding).getBytes()))
+        .addHeader(CONTENT_TYPE, APPLICATION_X_WWW_FORM_URLENCODED.toRfcString());
 
-      if (authorization != null) {
-        requestBuilder.addHeader(AUTHORIZATION, authorization);
-      }
-
-      // TODO MULE-11272 Support doing non-blocking requests
-      final HttpResponse response = httpClient.send(requestBuilder.build(), TOKEN_REQUEST_TIMEOUT_MILLIS, true, null);
-
-      String contentType = response.getHeaderValue(CONTENT_TYPE);
-      MediaType responseContentType = contentType != null ? parse(contentType) : ANY;
-
-      String body = IOUtils.toString(response.getEntity().getContent());
-
-      if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
-        throw new TokenUrlResponseException(tokenUrl, response, body);
-      }
-
-      MultiMap<String, String> headers = response.getHeaders();
-
-      TokenResponse tokenResponse = new TokenResponse();
-      tokenResponse
-          .setAccessToken(resolveExpression(responseAccessTokenExpr, body, headers, responseContentType));
-      if (tokenResponse.getAccessToken() == null) {
-        throw new TokenNotFoundException(tokenUrl, response, body);
-      }
-      if (retrieveRefreshToken) {
-        tokenResponse
-            .setRefreshToken(resolveExpression(responseRefreshTokenExpr, body, headers, responseContentType));
-      }
-      tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, headers, responseContentType));
-
-      if (customParametersExtractorsExprs != null && !customParametersExtractorsExprs.isEmpty()) {
-        Map<String, Object> customParams = new HashMap<>();
-        for (Entry<String, String> customParamExpr : customParametersExtractorsExprs.entrySet()) {
-          customParams.put(customParamExpr.getKey(),
-                           resolveExpression(customParamExpr.getValue(), body, headers, responseContentType));
-        }
-        tokenResponse.setCustomResponseParameters(customParams);
-      }
-
-      return tokenResponse;
-    } catch (IOException e) {
-      throw new TokenUrlResponseException(tokenUrl, e);
-    } catch (TimeoutException e) {
-      throw new TokenUrlResponseException(tokenUrl, e);
+    if (authorization != null) {
+      requestBuilder.addHeader(AUTHORIZATION, authorization);
     }
+
+    return httpClient.sendAsync(requestBuilder.build(), TOKEN_REQUEST_TIMEOUT_MILLIS, true, null)
+        .exceptionally(t -> {
+          return withContextClassLoader(AbstractOAuthDancer.class.getClassLoader(), () -> {
+            if (t instanceof IOException) {
+              throw new CompletionException(new TokenUrlResponseException(tokenUrl, (IOException) t));
+            } else {
+              throw new CompletionException(t);
+            }
+          });
+        })
+        .thenApply(response -> {
+          return withContextClassLoader(AbstractOAuthDancer.class.getClassLoader(), () -> {
+            String contentType = response.getHeaderValue(CONTENT_TYPE);
+            MediaType responseContentType = contentType != null ? parse(contentType) : ANY;
+
+            String body = IOUtils.toString(response.getEntity().getContent());
+
+            if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
+              try {
+                throw new CompletionException(new TokenUrlResponseException(tokenUrl, response, body));
+              } catch (IOException e) {
+                throw new CompletionException(new TokenUrlResponseException(tokenUrl, e));
+              }
+            }
+
+            MultiMap<String, String> headers = response.getHeaders();
+
+            TokenResponse tokenResponse = new TokenResponse();
+            tokenResponse
+                .setAccessToken(resolveExpression(responseAccessTokenExpr, body, headers, responseContentType));
+            if (tokenResponse.getAccessToken() == null) {
+              throw new CompletionException(new TokenNotFoundException(tokenUrl, response, body));
+            }
+            if (retrieveRefreshToken) {
+              tokenResponse
+                  .setRefreshToken(resolveExpression(responseRefreshTokenExpr, body, headers, responseContentType));
+            }
+            tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, headers, responseContentType));
+
+            if (customParametersExtractorsExprs != null && !customParametersExtractorsExprs.isEmpty()) {
+              Map<String, Object> customParams = new HashMap<>();
+              for (Entry<String, String> customParamExpr : customParametersExtractorsExprs.entrySet()) {
+                customParams.put(customParamExpr.getKey(),
+                                 resolveExpression(customParamExpr.getValue(), body, headers, responseContentType));
+              }
+              tokenResponse.setCustomResponseParameters(customParams);
+            }
+
+            return tokenResponse;
+          });
+        });
   }
 
   protected <T> T resolveExpression(String expr, Object body, MultiMap<String, String> headers,

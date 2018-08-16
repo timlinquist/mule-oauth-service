@@ -10,6 +10,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static java.util.Optional.empty;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.nullValue;
@@ -67,6 +68,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -105,7 +107,9 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
     builder.tokenUrl("http://host/token");
 
     reset(httpClient);
-    when(httpClient.send(any(), anyInt(), anyBoolean(), any())).thenThrow(new IOException("It failed!"));
+    final CompletableFuture<HttpResponse> failedFuture = new CompletableFuture<>();
+    failedFuture.completeExceptionally(new IOException("It failed!"));
+    when(httpClient.sendAsync(any(), anyInt(), anyBoolean(), any())).thenReturn(failedFuture);
 
     ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
 
@@ -124,7 +128,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
     when(httpEntity.getContent()).thenReturn(new ReaderInputStream(new StringReader("")));
     when(httpResponse.getEntity()).thenReturn(httpEntity);
     when(httpResponse.getStatusCode()).thenReturn(403);
-    when(httpClient.send(any(), anyInt(), anyBoolean(), any())).thenReturn(httpResponse);
+    when(httpClient.sendAsync(any(), anyInt(), anyBoolean(), any())).thenReturn(completedFuture(httpResponse));
 
     ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
 
