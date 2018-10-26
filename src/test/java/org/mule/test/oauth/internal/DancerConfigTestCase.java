@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.sameInstance;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThat;
+import org.junit.Ignore;
 import static org.junit.rules.ExpectedException.none;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Matchers.any;
@@ -73,6 +74,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import io.qameta.allure.Feature;
 
 @Feature("OAuth Service")
+@Ignore("MULE-15938: Ignoring this flaky tests that are adding no value in this state")
 public class DancerConfigTestCase extends AbstractOAuthTestCase {
 
   @Rule
