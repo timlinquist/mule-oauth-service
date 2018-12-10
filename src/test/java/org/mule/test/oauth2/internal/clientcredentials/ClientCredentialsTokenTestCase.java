@@ -22,19 +22,12 @@ import static org.mockito.Matchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mule.runtime.http.api.HttpHeaders.Names.AUTHORIZATION;
-
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.http.api.client.HttpRequestOptions;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.test.oauth.AbstractOAuthTestCase;
-
-import org.apache.commons.io.IOUtils;
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -44,6 +37,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+
+import org.apache.commons.io.IOUtils;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 
 
 public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
@@ -94,7 +92,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
 
   }
 
-  private static class HttpRequestUrlMatcher extends BaseMatcher<HttpRequest> {
+  private static class HttpRequestUrlMatcher implements ArgumentMatcher<HttpRequest> {
 
     private URI uri;
 
@@ -103,15 +101,9 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
     }
 
     @Override
-    public boolean matches(Object item) {
-      return item instanceof HttpRequest && ((HttpRequest) item).getUri().equals(uri);
+    public boolean matches(HttpRequest request) {
+      return request.getUri().equals(uri);
     }
-
-    @Override
-    public void describeTo(Description description) {
-      description.appendText("request with url '" + uri.toString() + "'");
-    }
-
   }
 
   @Test
@@ -120,7 +112,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
     builder.tokenUrl("http://host/token");
     builder.clientCredentials("Aladdin", "open sesame");
 
-    ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
+    startDancer(builder);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
     verify(httpClient).sendAsync(requestCaptor.capture(), any(HttpRequestOptions.class));
@@ -140,7 +132,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
     builder.clientCredentials("Aladdin", "open sesame");
     builder.encodeClientCredentialsInBody(true);
 
-    ClientCredentialsOAuthDancer minimalDancer = startDancer(builder);
+    startDancer(builder);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
     verify(httpClient).sendAsync(requestCaptor.capture(), any(HttpRequestOptions.class));
