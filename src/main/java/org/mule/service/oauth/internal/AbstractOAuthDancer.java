@@ -20,6 +20,7 @@ import static org.mule.runtime.http.api.HttpHeaders.Names.AUTHORIZATION;
 import static org.mule.runtime.http.api.HttpHeaders.Names.CONTENT_TYPE;
 import static org.mule.runtime.http.api.HttpHeaders.Values.APPLICATION_X_WWW_FORM_URLENCODED;
 import static org.mule.runtime.http.api.utils.HttpEncoderDecoderUtils.encodeString;
+import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.QUERY_PARAMS;
 import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT_RESOURCE_OWNER_ID;
 import static org.mule.service.oauth.internal.OAuthConstants.CLIENT_ID_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.CLIENT_SECRET_PARAMETER;
@@ -40,6 +41,7 @@ import org.mule.runtime.http.api.client.HttpRequestOptions;
 import org.mule.runtime.http.api.domain.entity.ByteArrayHttpEntity;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.request.HttpRequestBuilder;
+import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
 import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
@@ -70,7 +72,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   protected final String tokenUrl;
   protected final Charset encoding;
   protected final String scopes;
-  protected final boolean encodeClientCredentialsInBody;
+  protected final ClientCredentialsLocation clientCredentialsLocation;
 
   protected final String responseAccessTokenExpr;
   protected final String responseRefreshTokenExpr;
@@ -84,7 +86,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   private final MuleExpressionLanguage expressionEvaluator;
 
   protected AbstractOAuthDancer(String clientId, String clientSecret, String tokenUrl, Charset encoding, String scopes,
-                                boolean encodeClientCredentialsInBody, String responseAccessTokenExpr,
+                                ClientCredentialsLocation clientCredentialsLocation, String responseAccessTokenExpr,
                                 String responseRefreshTokenExpr, String responseExpiresInExpr,
                                 Map<String, String> customParametersExtractorsExprs,
                                 Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
@@ -95,7 +97,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
     this.tokenUrl = tokenUrl;
     this.encoding = encoding;
     this.scopes = scopes;
-    this.encodeClientCredentialsInBody = encodeClientCredentialsInBody;
+    this.clientCredentialsLocation = clientCredentialsLocation;
     this.responseAccessTokenExpr = responseAccessTokenExpr;
     this.responseRefreshTokenExpr = responseRefreshTokenExpr;
     this.responseExpiresInExpr = responseExpiresInExpr;
@@ -119,33 +121,39 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   }
 
   /**
-   * Based on the value of {@code encodeClientCredentialsInBody}, add the clientId and clientSecret values to the form or encode
+   * Based on the value of {@code clientCredentialsLocation}, add the clientId and clientSecret values to the form or encode
    * and return them.
    *
    * @param formData
-   * @param encodeClientCredentialsInBody
-   * @return
    */
-  protected String handleClientCredentials(final Map<String, String> formData, boolean encodeClientCredentialsInBody) {
-    if (encodeClientCredentialsInBody) {
-      formData.put(CLIENT_ID_PARAMETER, clientId);
-      formData.put(CLIENT_SECRET_PARAMETER, clientSecret);
-      return null;
-    } else {
-      return "Basic " + encodeBase64String(format("%s:%s", clientId, clientSecret).getBytes());
+  protected String handleClientCredentials(final Map<String, String> formData) {
+    switch (clientCredentialsLocation) {
+      case BASIC_AUTH_HEADER:
+        return "Basic " + encodeBase64String(format("%s:%s", clientId, clientSecret).getBytes());
+      case BODY:
+        formData.put(CLIENT_ID_PARAMETER, clientId);
+        formData.put(CLIENT_SECRET_PARAMETER, clientSecret);
     }
+    return null;
   }
 
-  protected CompletableFuture<TokenResponse> invokeTokenUrl(String tokenUrl, Map<String, String> tokenRequestFormToSend,
+  protected CompletableFuture<TokenResponse> invokeTokenUrl(String tokenUrl,
+                                                            Map<String, String> tokenRequestFormToSend,
+                                                            MultiMap<String, String> queryParams,
                                                             String authorization,
-                                                            boolean retrieveRefreshToken, Charset encoding) {
+                                                            boolean retrieveRefreshToken,
+                                                            Charset encoding) {
     final HttpRequestBuilder requestBuilder = HttpRequest.builder()
         .uri(tokenUrl).method(POST.name())
         .entity(new ByteArrayHttpEntity(encodeString(tokenRequestFormToSend, encoding).getBytes()))
-        .addHeader(CONTENT_TYPE, APPLICATION_X_WWW_FORM_URLENCODED.toRfcString());
+        .addHeader(CONTENT_TYPE, APPLICATION_X_WWW_FORM_URLENCODED.toRfcString())
+        .queryParams(queryParams);
 
     if (authorization != null) {
       requestBuilder.addHeader(AUTHORIZATION, authorization);
+    } else if (QUERY_PARAMS.equals(clientCredentialsLocation)) {
+      requestBuilder.addQueryParam(CLIENT_ID_PARAMETER, clientId);
+      requestBuilder.addQueryParam(CLIENT_SECRET_PARAMETER, clientSecret);
     }
 
     return httpClient.sendAsync(requestBuilder.build(), HttpRequestOptions.builder()
