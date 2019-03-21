@@ -13,7 +13,6 @@ import static java.util.Optional.of;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.BODY;
-
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lock.LockFactory;
@@ -26,12 +25,15 @@ import org.mule.runtime.http.api.server.ServerCreationException;
 import org.mule.runtime.oauth.api.AuthorizationCodeOAuthDancer;
 import org.mule.runtime.oauth.api.AuthorizationCodeRequest;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeDanceCallbackContext;
+import org.mule.runtime.oauth.api.builder.AuthorizationCodeListener;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultAuthorizationCodeOAuthDancer;
 
 import java.net.URL;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -50,6 +52,7 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
 
   private String state;
   private String authorizationUrl;
+  private List<AuthorizationCodeListener> listeners = new LinkedList<>();
 
   private Supplier<Map<String, String>> customParameters = () -> emptyMap();
 
@@ -170,6 +173,14 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
   }
 
   @Override
+  public OAuthAuthorizationCodeDancerBuilder addListener(AuthorizationCodeListener listener) {
+    requireNonNull(listener, "Cannot add a null listener");
+    listeners.add(listener);
+
+    return this;
+  }
+
+  @Override
   public AuthorizationCodeOAuthDancer build() {
     checkArgument(isNotBlank(clientId), "clientId cannot be blank");
     checkArgument(isNotBlank(clientSecret), "clientSecret cannot be blank");
@@ -186,7 +197,7 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
                                                    responseExpiresInExpr, customParameters, customParametersExtractorsExprs,
                                                    resourceOwnerIdTransformer, lockProvider, tokensStore,
                                                    httpClientFactory.get(), expressionEvaluator, beforeDanceCallback,
-                                                   afterDanceCallback);
+                                                   afterDanceCallback, listeners);
   }
 
 }
