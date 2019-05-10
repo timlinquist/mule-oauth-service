@@ -49,6 +49,7 @@ import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.state.TokenResponse;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
@@ -140,6 +141,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   protected CompletableFuture<TokenResponse> invokeTokenUrl(String tokenUrl,
                                                             Map<String, String> tokenRequestFormToSend,
                                                             MultiMap<String, String> queryParams,
+                                                            MultiMap<String, String> headers,
                                                             String authorization,
                                                             boolean retrieveRefreshToken,
                                                             Charset encoding) {
@@ -147,7 +149,8 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
         .uri(tokenUrl).method(POST.name())
         .entity(new ByteArrayHttpEntity(encodeString(tokenRequestFormToSend, encoding).getBytes()))
         .addHeader(CONTENT_TYPE, APPLICATION_X_WWW_FORM_URLENCODED.toRfcString())
-        .queryParams(queryParams);
+        .queryParams(queryParams)
+        .headers(headers);
 
     if (authorization != null) {
       requestBuilder.addHeader(AUTHORIZATION, authorization);
@@ -173,35 +176,38 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
             String contentType = response.getHeaderValue(CONTENT_TYPE);
             MediaType responseContentType = contentType != null ? parse(contentType) : ANY;
 
-            String body = IOUtils.toString(response.getEntity().getContent());
+            String body;
+            try (InputStream content = response.getEntity().getContent()) {
+              body = IOUtils.toString(content);
 
-            if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
-              try {
-                throw new CompletionException(new TokenUrlResponseException(tokenUrl, response, body));
-              } catch (IOException e) {
-                throw new CompletionException(new TokenUrlResponseException(tokenUrl, e));
+              if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
+                try {
+                  throw new CompletionException(new TokenUrlResponseException(tokenUrl, response, body));
+                } catch (IOException e) {
+                  throw new CompletionException(new TokenUrlResponseException(tokenUrl, e));
+                }
               }
             }
 
-            MultiMap<String, String> headers = response.getHeaders();
+            MultiMap<String, String> responseHeaders = response.getHeaders();
 
             TokenResponse tokenResponse = new TokenResponse();
             tokenResponse
-                .setAccessToken(resolveExpression(responseAccessTokenExpr, body, headers, responseContentType));
+                .setAccessToken(resolveExpression(responseAccessTokenExpr, body, responseHeaders, responseContentType));
             if (tokenResponse.getAccessToken() == null) {
               throw new CompletionException(new TokenNotFoundException(tokenUrl, response, body));
             }
             if (retrieveRefreshToken) {
               tokenResponse
-                  .setRefreshToken(resolveExpression(responseRefreshTokenExpr, body, headers, responseContentType));
+                  .setRefreshToken(resolveExpression(responseRefreshTokenExpr, body, responseHeaders, responseContentType));
             }
-            tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, headers, responseContentType));
+            tokenResponse.setExpiresIn(resolveExpression(responseExpiresInExpr, body, responseHeaders, responseContentType));
 
             if (customParametersExtractorsExprs != null && !customParametersExtractorsExprs.isEmpty()) {
               Map<String, Object> customParams = new HashMap<>();
               for (Entry<String, String> customParamExpr : customParametersExtractorsExprs.entrySet()) {
                 customParams.put(customParamExpr.getKey(),
-                                 resolveExpression(customParamExpr.getValue(), body, headers, responseContentType));
+                                 resolveExpression(customParamExpr.getValue(), body, responseHeaders, responseContentType));
               }
               tokenResponse.setCustomResponseParameters(customParams);
             }
