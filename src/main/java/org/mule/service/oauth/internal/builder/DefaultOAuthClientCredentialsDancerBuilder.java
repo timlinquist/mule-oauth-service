@@ -11,6 +11,7 @@ import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
@@ -27,6 +28,9 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
     implements OAuthClientCredentialsDancerBuilder {
 
   private List<ClientCredentialsListener> listeners = new LinkedList<>();
+  private MultiMap<String, String> customParameters = new MultiMap<>();
+  private MultiMap<String, String> customHeaders = new MultiMap<>();
+
 
   public DefaultOAuthClientCredentialsDancerBuilder(LockFactory lockProvider,
                                                     Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
@@ -41,9 +45,27 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
   }
 
   @Override
-  public void addListener(ClientCredentialsListener listener) {
+  public OAuthClientCredentialsDancerBuilder customParameters(Map<String, String> customParameters) {
+    requireNonNull(customParameters, "customParameters cannot be null");
+    this.customParameters.putAll(customParameters);
+
+    return this;
+  }
+
+  @Override
+  public OAuthClientCredentialsDancerBuilder customHeaders(Map<String, String> customHeaders) {
+    requireNonNull(customHeaders, "customHeaders cannot be null");
+    this.customHeaders.putAll(customHeaders);
+
+    return this;
+  }
+
+  @Override
+  public OAuthClientCredentialsDancerBuilder addListener(ClientCredentialsListener listener) {
     requireNonNull(listener, "Cannot add a null listener");
     listeners.add(listener);
+
+    return this;
   }
 
   @Override
@@ -56,7 +78,8 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
                                                    encoding, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParametersExtractorsExprs,
                                                    resourceOwnerIdTransformer, lockProvider, tokensStore,
-                                                   httpClientFactory.get(), expressionEvaluator, listeners);
+                                                   httpClientFactory.get(), expressionEvaluator, customParameters,
+                                                   customHeaders, listeners);
   }
 
 }

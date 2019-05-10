@@ -8,7 +8,6 @@ package org.mule.service.oauth.internal;
 
 import static java.lang.Thread.currentThread;
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static org.mule.runtime.api.util.MultiMap.emptyMultiMap;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT_RESOURCE_OWNER_ID;
@@ -21,6 +20,7 @@ import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.LifecycleException;
 import org.mule.runtime.api.lifecycle.Startable;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
@@ -55,6 +55,8 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
   private static final Logger LOGGER = getLogger(DefaultClientCredentialsOAuthDancer.class);
 
   private boolean accessTokenRefreshedOnStart = false;
+  private MultiMap<String, String> customParameters;
+  private MultiMap<String, String> customHeaders;
   private final List<ClientCredentialsListener> listeners;
 
   public DefaultClientCredentialsOAuthDancer(String clientId, String clientSecret, String tokenUrl, String scopes,
@@ -64,11 +66,16 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
                                              Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
                                              Map<String, DefaultResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
                                              MuleExpressionLanguage expressionEvaluator,
+                                             MultiMap<String, String> customParameters,
+                                             MultiMap<String, String> customHeaders,
                                              List<ClientCredentialsListener> listeners) {
     super(clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
           responseRefreshTokenExpr, responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, lockProvider,
           tokensStore, httpClient,
           expressionEvaluator);
+
+    this.customParameters = customParameters;
+    this.customHeaders = customHeaders;
 
     if (listeners != null) {
       this.listeners = new CopyOnWriteArrayList<>(listeners);
@@ -127,9 +134,7 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
   }
 
   private CompletableFuture<Void> doRefreshToken(boolean notifyListeners) {
-    boolean lockWasAcqired = refreshTokenLock.tryLock();
-
-    if (lockWasAcqired) {
+    if (refreshTokenLock.tryLock()) {
       try {
         lastRefreshTokenFuture = doRefreshTokenRequest(notifyListeners);
         return lastRefreshTokenFuture;
@@ -155,27 +160,28 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
     }
     String authorization = handleClientCredentials(formData);
 
-    return invokeTokenUrl(tokenUrl, formData, emptyMultiMap(), authorization, false, encoding).thenAccept(tokenResponse -> {
-      withContextClassLoader(DefaultClientCredentialsOAuthDancer.class.getClassLoader(), () -> {
-        if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("Retrieved access token, refresh token and expires from token url are: %s, %s, %s",
-                       tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), tokenResponse.getExpiresIn());
-        }
+    return invokeTokenUrl(tokenUrl, formData, customParameters, customHeaders, authorization, false, encoding)
+        .thenAccept(tokenResponse -> {
+          withContextClassLoader(DefaultClientCredentialsOAuthDancer.class.getClassLoader(), () -> {
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Retrieved access token, refresh token and expires from token url are: %s, %s, %s",
+                           tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), tokenResponse.getExpiresIn());
+            }
 
-        final DefaultResourceOwnerOAuthContext defaultUserState = (DefaultResourceOwnerOAuthContext) getContext();
-        defaultUserState.setAccessToken(tokenResponse.getAccessToken());
-        defaultUserState.setExpiresIn(tokenResponse.getExpiresIn());
-        for (Entry<String, Object> customResponseParameterEntry : tokenResponse.getCustomResponseParameters().entrySet()) {
-          defaultUserState.getTokenResponseParameters().put(customResponseParameterEntry.getKey(),
-                                                            customResponseParameterEntry.getValue());
-        }
+            final DefaultResourceOwnerOAuthContext defaultUserState = (DefaultResourceOwnerOAuthContext) getContext();
+            defaultUserState.setAccessToken(tokenResponse.getAccessToken());
+            defaultUserState.setExpiresIn(tokenResponse.getExpiresIn());
+            for (Entry<String, Object> customResponseParameterEntry : tokenResponse.getCustomResponseParameters().entrySet()) {
+              defaultUserState.getTokenResponseParameters().put(customResponseParameterEntry.getKey(),
+                                                                customResponseParameterEntry.getValue());
+            }
 
-        updateResourceOwnerOAuthContext(defaultUserState);
-        if (notifyListeners) {
-          listeners.forEach(l -> l.onTokenRefreshed(defaultUserState));
-        }
-      });
-    });
+            updateResourceOwnerOAuthContext(defaultUserState);
+            if (notifyListeners) {
+              listeners.forEach(l -> l.onTokenRefreshed(defaultUserState));
+            }
+          });
+        });
   }
 
   @Override
