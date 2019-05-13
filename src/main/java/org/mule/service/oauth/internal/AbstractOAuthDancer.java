@@ -49,6 +49,7 @@ import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.state.TokenResponse;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
@@ -175,13 +176,16 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
             String contentType = response.getHeaderValue(CONTENT_TYPE);
             MediaType responseContentType = contentType != null ? parse(contentType) : ANY;
 
-            String body = IOUtils.toString(response.getEntity().getContent());
+            String body;
+            try (InputStream content = response.getEntity().getContent()) {
+              body = IOUtils.toString(content);
 
-            if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
-              try {
-                throw new CompletionException(new TokenUrlResponseException(tokenUrl, response, body));
-              } catch (IOException e) {
-                throw new CompletionException(new TokenUrlResponseException(tokenUrl, e));
+              if (response.getStatusCode() >= BAD_REQUEST.getStatusCode()) {
+                try {
+                  throw new CompletionException(new TokenUrlResponseException(tokenUrl, response, body));
+                } catch (IOException e) {
+                  throw new CompletionException(new TokenUrlResponseException(tokenUrl, e));
+                }
               }
             }
 
