@@ -47,15 +47,23 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
   @Override
   public OAuthClientCredentialsDancerBuilder customParameters(Map<String, String> customParameters) {
     requireNonNull(customParameters, "customParameters cannot be null");
-    this.customParameters.putAll(customParameters);
+    putAll(customParameters, this.customParameters);
 
     return this;
+  }
+
+  private void putAll(Map<String, String> source, MultiMap<String, String> target) {
+    if (source instanceof MultiMap) {
+      target.putAll((MultiMap<String, String>) source);
+    } else {
+      target.putAll(source);
+    }
   }
 
   @Override
   public OAuthClientCredentialsDancerBuilder customHeaders(Map<String, String> customHeaders) {
     requireNonNull(customHeaders, "customHeaders cannot be null");
-    this.customHeaders.putAll(customHeaders);
+    putAll(customHeaders, this.customHeaders);
 
     return this;
   }

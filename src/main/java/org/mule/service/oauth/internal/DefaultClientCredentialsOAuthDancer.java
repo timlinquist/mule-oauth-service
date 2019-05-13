@@ -89,7 +89,7 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
     super.start();
     // We use a reentrant instead of one from the lock factory because the local state of this object cannot be shared in the
     // cluster.
-    // For this to work within a cluster we would need some notifications mechaniusm from the object store to know when a token
+    // For this to work within a cluster we would need some notifications mechanism from the object store to know when a token
     // was refreshed in another node.
     refreshTokenLock = new ReentrantLock();
     try {

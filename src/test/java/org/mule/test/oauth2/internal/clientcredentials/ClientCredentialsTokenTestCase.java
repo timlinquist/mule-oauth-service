@@ -9,6 +9,7 @@ package org.mule.test.oauth2.internal.clientcredentials;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.concurrent.Executors.newFixedThreadPool;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
@@ -27,10 +28,10 @@ import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.BASIC
 import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.BODY;
 import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.QUERY_PARAMS;
 import org.mule.runtime.api.exception.MuleRuntimeException;
+import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.client.HttpRequestOptions;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
-import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.test.oauth.AbstractOAuthTestCase;
 
@@ -42,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
 import org.apache.commons.io.IOUtils;
 import org.junit.Test;
@@ -50,6 +52,11 @@ import org.mockito.ArgumentMatcher;
 
 
 public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
+
+  private static final String ALADDIN = "Aladdin";
+  private static final String OPEN_SESAME = "openSesame";
+  private static final String CLIENT_ID = "client_id";
+  private static final String CLIENT_SECRET = "client_secret";
 
   @Test
   public void refreshTokenAfterInvalidate() throws Exception {
@@ -114,7 +121,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
   private void assertClientCredentialsEncodedInHeader(boolean useDeprecatedMethod) throws Exception {
     final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
     builder.tokenUrl("http://host/token");
-    builder.clientCredentials("Aladdin", "open sesame");
+    builder.clientCredentials(ALADDIN, "open sesame");
     if (useDeprecatedMethod) {
       builder.encodeClientCredentialsInBody(false);
     } else {
@@ -151,7 +158,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
   public void clientCredentialsEncodedInHeaderByDefault() throws Exception {
     final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
     builder.tokenUrl("http://host/token");
-    builder.clientCredentials("Aladdin", "open sesame");
+    builder.clientCredentials(ALADDIN, "open sesame");
 
     startDancer(builder);
 
@@ -172,7 +179,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
   private void assertClientCredentialsInBody(boolean useDeprecatedMethod) throws Exception {
     final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
     builder.tokenUrl("http://host/token");
-    builder.clientCredentials("Aladdin", "open sesame");
+    builder.clientCredentials(ALADDIN, "open sesame");
     if (useDeprecatedMethod) {
       builder.encodeClientCredentialsInBody(true);
     } else {
@@ -209,7 +216,7 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
   public void clientCredentialsInQueryParams() throws Exception {
     final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
     builder.tokenUrl("http://host/token");
-    builder.clientCredentials("Aladdin", "openSesame");
+    builder.clientCredentials(ALADDIN, OPEN_SESAME);
     builder.withClientCredentialsIn(QUERY_PARAMS);
 
     startDancer(builder);
@@ -219,8 +226,8 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
 
     assertThat(requestCaptor.getValue().getHeaderNames(), not(hasItem(equalToIgnoringCase(AUTHORIZATION))));
 
-    assertThat(requestCaptor.getValue().getQueryParams().get("client_id"), is("Aladdin"));
-    assertThat(requestCaptor.getValue().getQueryParams().get("client_secret"), is("openSesame"));
+    assertThat(requestCaptor.getValue().getQueryParams().get(CLIENT_ID), is(ALADDIN));
+    assertThat(requestCaptor.getValue().getQueryParams().get(CLIENT_SECRET), is(OPEN_SESAME));
 
     String requestBody = IOUtils.toString(requestCaptor.getValue().getEntity().getContent(), UTF_8);
     assertThat(requestBody, containsString("grant_type=client_credentials"));
@@ -228,4 +235,63 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
     assertThat(requestBody, not(containsString("client_id=Aladdin")));
   }
 
+  @Test
+  public void clientCredentialsWithCustomQueryParams() throws Exception {
+    final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
+    builder.tokenUrl("http://host/token");
+    builder.clientCredentials(ALADDIN, OPEN_SESAME);
+    builder.withClientCredentialsIn(QUERY_PARAMS);
+
+    MultiMap<String, String> queryParams = new MultiMap<>();
+
+    final String daenerys = "Daenerys";
+    final String[] daenerysValues = new String[] {"First of her name", "Mother of Dragons", "Mad Queen"};
+    final String jonSnow = "Jon Snow";
+    final String[] snowValues = new String[] {"Commander of the Night Watch", "Looser"};
+
+    Stream.of(daenerysValues).forEach(v -> queryParams.put(daenerys, v));
+    Stream.of(snowValues).forEach(v -> queryParams.put(jonSnow, v));
+
+    builder.customParameters(queryParams);
+
+    startDancer(builder);
+
+    ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
+    verify(httpClient).sendAsync(requestCaptor.capture(), any(HttpRequestOptions.class));
+
+    HttpRequest request = requestCaptor.getValue();
+
+    assertThat(request.getQueryParams().getAll(daenerys), containsInAnyOrder(daenerysValues));
+    assertThat(request.getQueryParams().getAll(jonSnow), containsInAnyOrder(snowValues));
+  }
+
+  @Test
+  public void clientCredentialsWithCustomHeaders() throws Exception {
+    final OAuthClientCredentialsDancerBuilder builder = baseClientCredentialsDancerBuilder();
+    builder.tokenUrl("http://host/token");
+    builder.clientCredentials(ALADDIN, OPEN_SESAME);
+    builder.withClientCredentialsIn(QUERY_PARAMS);
+
+    MultiMap<String, String> customHeaders = new MultiMap<>();
+
+    final String daenerys = "Daenerys";
+    final String[] daenerysValues = new String[] {"First of her name", "Mother of Dragons", "Mad Queen"};
+    final String jonSnow = "Jon Snow";
+    final String[] snowValues = new String[] {"Commander of the Night Watch", "Looser"};
+
+    Stream.of(daenerysValues).forEach(v -> customHeaders.put(daenerys, v));
+    Stream.of(snowValues).forEach(v -> customHeaders.put(jonSnow, v));
+
+    builder.customHeaders(customHeaders);
+
+    startDancer(builder);
+
+    ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
+    verify(httpClient).sendAsync(requestCaptor.capture(), any(HttpRequestOptions.class));
+
+    HttpRequest request = requestCaptor.getValue();
+
+    assertThat(request.getHeaders().getAll(daenerys), containsInAnyOrder(daenerysValues));
+    assertThat(request.getHeaders().getAll(jonSnow), containsInAnyOrder(snowValues));
+  }
 }
