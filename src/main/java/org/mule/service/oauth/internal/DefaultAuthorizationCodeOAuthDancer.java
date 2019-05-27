@@ -121,6 +121,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
   private final String state;
   private final String authorizationUrl;
   private final Supplier<Map<String, String>> customParameters;
+  private final Supplier<Map<String, String>> customHeaders;
 
   private final Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback;
   private final BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback;
@@ -135,7 +136,9 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                                              String localCallbackUrlPath, String localAuthorizationUrlPath,
                                              String localAuthorizationUrlResourceOwnerId, String state, String authorizationUrl,
                                              String responseAccessTokenExpr, String responseRefreshTokenExpr,
-                                             String responseExpiresInExpr, Supplier<Map<String, String>> customParameters,
+                                             String responseExpiresInExpr,
+                                             Supplier<Map<String, String>> customParameters,
+                                             Supplier<Map<String, String>> customHeaders,
                                              Map<String, String> customParametersExtractorsExprs,
                                              Function<String, String> resourceOwnerIdTransformer,
                                              LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
@@ -156,6 +159,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     this.state = state;
     this.authorizationUrl = authorizationUrl;
     this.customParameters = customParameters;
+    this.customHeaders = customHeaders;
 
     this.beforeDanceCallback = beforeDanceCallback;
     this.afterDanceCallback = afterDanceCallback;
@@ -339,7 +343,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     };
   }
 
-  private static void sendResponse(StateDecoder stateDecoder, HttpResponseReadyCallback responseCallback,
+  private void sendResponse(StateDecoder stateDecoder, HttpResponseReadyCallback responseCallback,
                                    HttpStatus statusEmptyState, String message, int authorizationStatus) {
     String onCompleteRedirectToValue = stateDecoder.decodeOnCompleteRedirectTo();
     if (!isEmpty(onCompleteRedirectToValue)) {
@@ -351,7 +355,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     }
   }
 
-  private static void sendResponse(HttpResponseReadyCallback responseCallback, HttpStatus status, String message,
+  private void sendResponse(HttpResponseReadyCallback responseCallback, HttpStatus status, String message,
                                    String locationHeader) {
     HttpResponseBuilder httpResponseBuilder = HttpResponse.builder();
     httpResponseBuilder.statusCode(status.getStatusCode());
@@ -359,6 +363,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     httpResponseBuilder.entity(new ByteArrayHttpEntity(message.getBytes()));
     httpResponseBuilder.addHeader(CONTENT_LENGTH, valueOf(message.length()));
     httpResponseBuilder.addHeader(LOCATION, locationHeader);
+    httpResponseBuilder.headers(new MultiMap<>(customHeaders.get()));
     responseCallback.responseReady(httpResponseBuilder.build(), new ResponseStatusCallback() {
 
       @Override
