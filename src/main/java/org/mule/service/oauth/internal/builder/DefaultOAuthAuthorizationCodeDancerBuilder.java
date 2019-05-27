@@ -55,7 +55,7 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
   private List<AuthorizationCodeListener> listeners = new LinkedList<>();
 
   private Supplier<Map<String, String>> customParameters = () -> emptyMap();
-  private Supplier<Map<String, String>> customHeaders= () -> emptyMap();
+  private Supplier<Map<String, String>> customHeaders = () -> emptyMap();
 
   private Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback = r -> k -> empty();
   private BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback = (vars, ctx) -> {
