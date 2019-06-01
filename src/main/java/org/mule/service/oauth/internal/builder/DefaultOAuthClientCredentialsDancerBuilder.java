@@ -6,22 +6,31 @@
  */
 package org.mule.service.oauth.internal.builder;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.mule.runtime.api.util.Preconditions.checkArgument;
-
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.HttpService;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
+import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultClientCredentialsOAuthDancer;
 
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 
 public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDancerBuilder<ClientCredentialsOAuthDancer>
     implements OAuthClientCredentialsDancerBuilder {
+
+  private List<ClientCredentialsListener> listeners = new LinkedList<>();
+  private MultiMap<String, String> customParameters = new MultiMap<>();
+  private MultiMap<String, String> customHeaders = new MultiMap<>();
+
 
   public DefaultOAuthClientCredentialsDancerBuilder(LockFactory lockProvider,
                                                     Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
@@ -36,6 +45,38 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
   }
 
   @Override
+  public OAuthClientCredentialsDancerBuilder customParameters(Map<String, String> customParameters) {
+    requireNonNull(customParameters, "customParameters cannot be null");
+    putAll(customParameters, this.customParameters);
+
+    return this;
+  }
+
+  private void putAll(Map<String, String> source, MultiMap<String, String> target) {
+    if (source instanceof MultiMap) {
+      target.putAll((MultiMap<String, String>) source);
+    } else {
+      target.putAll(source);
+    }
+  }
+
+  @Override
+  public OAuthClientCredentialsDancerBuilder customHeaders(Map<String, String> customHeaders) {
+    requireNonNull(customHeaders, "customHeaders cannot be null");
+    putAll(customHeaders, this.customHeaders);
+
+    return this;
+  }
+
+  @Override
+  public OAuthClientCredentialsDancerBuilder addListener(ClientCredentialsListener listener) {
+    requireNonNull(listener, "Cannot add a null listener");
+    listeners.add(listener);
+
+    return this;
+  }
+
+  @Override
   public ClientCredentialsOAuthDancer build() {
     checkArgument(isNotBlank(clientId), "clientId cannot be blank");
     checkArgument(isNotBlank(clientSecret), "clientSecret cannot be blank");
@@ -45,7 +86,8 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
                                                    encoding, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParametersExtractorsExprs,
                                                    resourceOwnerIdTransformer, lockProvider, tokensStore,
-                                                   httpClientFactory.get(), expressionEvaluator);
+                                                   httpClientFactory.get(), expressionEvaluator, customParameters,
+                                                   customHeaders, listeners);
   }
 
 }

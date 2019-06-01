@@ -55,6 +55,7 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
   private List<AuthorizationCodeListener> listeners = new LinkedList<>();
 
   private Supplier<Map<String, String>> customParameters = () -> emptyMap();
+  private Supplier<Map<String, String>> customHeaders = () -> emptyMap();
 
   private Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback = r -> k -> empty();
   private BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback = (vars, ctx) -> {
@@ -136,6 +137,19 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
   }
 
   @Override
+  public OAuthAuthorizationCodeDancerBuilder customHeaders(Map<String, String> customHeaders) {
+    requireNonNull(customHeaders, "customHeaders cannot be null");
+    return customHeaders(() -> customHeaders);
+  }
+
+  @Override
+  public OAuthAuthorizationCodeDancerBuilder customHeaders(Supplier<Map<String, String>> customHeaders) {
+    requireNonNull(customHeaders, "customHeaders cannot be null");
+    this.customHeaders = customHeaders;
+    return this;
+  }
+
+  @Override
   public OAuthAuthorizationCodeDancerBuilder state(String stateExpr) {
     this.state = stateExpr;
     return this;
@@ -194,7 +208,8 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
                                                    localCallbackUrlPath, localAuthorizationUrlPath,
                                                    localAuthorizationUrlResourceOwnerId, state,
                                                    authorizationUrl, responseAccessTokenExpr, responseRefreshTokenExpr,
-                                                   responseExpiresInExpr, customParameters, customParametersExtractorsExprs,
+                                                   responseExpiresInExpr, customParameters, customHeaders,
+                                                   customParametersExtractorsExprs,
                                                    resourceOwnerIdTransformer, lockProvider, tokensStore,
                                                    httpClientFactory.get(), expressionEvaluator, beforeDanceCallback,
                                                    afterDanceCallback, listeners);

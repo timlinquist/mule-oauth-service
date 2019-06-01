@@ -121,6 +121,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
   private final String state;
   private final String authorizationUrl;
   private final Supplier<Map<String, String>> customParameters;
+  private final Supplier<Map<String, String>> customHeaders;
 
   private final Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback;
   private final BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback;
@@ -135,7 +136,9 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                                              String localCallbackUrlPath, String localAuthorizationUrlPath,
                                              String localAuthorizationUrlResourceOwnerId, String state, String authorizationUrl,
                                              String responseAccessTokenExpr, String responseRefreshTokenExpr,
-                                             String responseExpiresInExpr, Supplier<Map<String, String>> customParameters,
+                                             String responseExpiresInExpr,
+                                             Supplier<Map<String, String>> customParameters,
+                                             Supplier<Map<String, String>> customHeaders,
                                              Map<String, String> customParametersExtractorsExprs,
                                              Function<String, String> resourceOwnerIdTransformer,
                                              LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
@@ -156,6 +159,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     this.state = state;
     this.authorizationUrl = authorizationUrl;
     this.customParameters = customParameters;
+    this.customHeaders = customHeaders;
 
     this.beforeDanceCallback = beforeDanceCallback;
     this.afterDanceCallback = afterDanceCallback;
@@ -219,7 +223,8 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     responseCallback.responseReady(HttpResponse.builder()
         .statusCode(status.getStatusCode())
         .reasonPhrase(status.getReasonPhrase())
-        .entity(message != null ? new ByteArrayHttpEntity(message.getBytes()) : new EmptyHttpEntity())
+        .entity(
+                message != null ? new ByteArrayHttpEntity(message.getBytes()) : new EmptyHttpEntity())
         .addHeader(CONTENT_LENGTH, message != null ? valueOf(message.length()) : "0")
         .build(), new ResponseStatusCallback() {
 
@@ -279,7 +284,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
         formData.put(GRANT_TYPE_PARAMETER, GRANT_TYPE_AUTHENTICATION_CODE);
         formData.put(REDIRECT_URI_PARAMETER, externalCallbackUrl);
 
-        invokeTokenUrl(tokenUrl, formData, emptyMultiMap(), authorization, true, encoding)
+        invokeTokenUrl(tokenUrl, formData, emptyMultiMap(), emptyMultiMap(), authorization, true, encoding)
             .exceptionally(e -> {
               withContextClassLoader(DefaultAuthorizationCodeOAuthDancer.class.getClassLoader(), () -> {
                 if (e.getCause() instanceof TokenUrlResponseException) {
@@ -337,8 +342,8 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     };
   }
 
-  private static void sendResponse(StateDecoder stateDecoder, HttpResponseReadyCallback responseCallback,
-                                   HttpStatus statusEmptyState, String message, int authorizationStatus) {
+  private void sendResponse(StateDecoder stateDecoder, HttpResponseReadyCallback responseCallback,
+                            HttpStatus statusEmptyState, String message, int authorizationStatus) {
     String onCompleteRedirectToValue = stateDecoder.decodeOnCompleteRedirectTo();
     if (!isEmpty(onCompleteRedirectToValue)) {
       sendResponse(responseCallback, MOVED_TEMPORARILY, message, appendQueryParam(onCompleteRedirectToValue,
@@ -349,14 +354,15 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     }
   }
 
-  private static void sendResponse(HttpResponseReadyCallback responseCallback, HttpStatus status, String message,
-                                   String locationHeader) {
+  private void sendResponse(HttpResponseReadyCallback responseCallback, HttpStatus status, String message,
+                            String locationHeader) {
     HttpResponseBuilder httpResponseBuilder = HttpResponse.builder();
     httpResponseBuilder.statusCode(status.getStatusCode());
     httpResponseBuilder.reasonPhrase(status.getReasonPhrase());
     httpResponseBuilder.entity(new ByteArrayHttpEntity(message.getBytes()));
     httpResponseBuilder.addHeader(CONTENT_LENGTH, valueOf(message.length()));
     httpResponseBuilder.addHeader(LOCATION, locationHeader);
+    httpResponseBuilder.headers(new MultiMap<>(customHeaders.get()));
     responseCallback.responseReady(httpResponseBuilder.build(), new ResponseStatusCallback() {
 
       @Override
@@ -533,7 +539,8 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
       try {
         final String userRefreshToken = resourceOwnerOAuthContext.getRefreshToken();
         if (userRefreshToken == null) {
-          throw new MuleRuntimeException(createStaticMessage("The user with user id %s has no refresh token in his OAuth state so we can't execute the refresh token call",
+          throw new MuleRuntimeException(createStaticMessage(
+                                                             "The user with user id %s has no refresh token in his OAuth state so we can't execute the refresh token call",
                                                              resourceOwnerOAuthContext.getResourceOwnerId()));
         }
 
@@ -555,21 +562,23 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
         }
 
         CompletableFuture<Void> refreshFuture =
-            invokeTokenUrl(tokenUrl, formData, queryParams, authorization, true, encoding).thenAccept(tokenResponse -> {
-              lock.lock();
-              try {
-                withContextClassLoader(DefaultAuthorizationCodeOAuthDancer.class.getClassLoader(), () -> {
-                  if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("Update OAuth Context for resourceOwnerId %s", resourceOwnerOAuthContext.getResourceOwnerId());
+            invokeTokenUrl(tokenUrl, formData, queryParams, emptyMultiMap(), authorization, true, encoding)
+                .thenAccept(tokenResponse -> {
+                  lock.lock();
+                  try {
+                    withContextClassLoader(DefaultAuthorizationCodeOAuthDancer.class.getClassLoader(), () -> {
+                      if (LOGGER.isDebugEnabled()) {
+                        LOGGER
+                            .debug("Update OAuth Context for resourceOwnerId %s", resourceOwnerOAuthContext.getResourceOwnerId());
+                      }
+                      updateResourceOwnerState(resourceOwnerOAuthContext, null, tokenResponse);
+                      updateResourceOwnerOAuthContext(resourceOwnerOAuthContext);
+                      listeners.forEach(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
+                    });
+                  } finally {
+                    lock.unlock();
                   }
-                  updateResourceOwnerState(resourceOwnerOAuthContext, null, tokenResponse);
-                  updateResourceOwnerOAuthContext(resourceOwnerOAuthContext);
-                  listeners.forEach(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
                 });
-              } finally {
-                lock.unlock();
-              }
-            });
         activeRefreshFutures.put(nullSafeResourceOwner, refreshFuture);
         refreshFuture.thenRun(() -> activeRefreshFutures.remove(nullSafeResourceOwner, refreshFuture));
         return refreshFuture;
