@@ -34,6 +34,7 @@ import static org.mule.runtime.http.api.HttpConstants.Method.GET;
 import static org.mule.service.oauth.internal.OAuthConstants.CODE_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.STATE_PARAMETER;
 import static org.mule.service.oauth.internal.state.StateEncoder.RESOURCE_OWNER_PARAM_NAME_ASSIGN;
+import static org.mule.tck.probe.PollingProber.probe;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleException;
@@ -55,13 +56,6 @@ import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.test.oauth.AbstractOAuthTestCase;
 
-import org.apache.commons.io.input.ReaderInputStream;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.mockito.ArgumentCaptor;
-
 import java.io.IOException;
 import java.io.StringReader;
 import java.net.MalformedURLException;
@@ -72,6 +66,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.commons.io.input.ReaderInputStream;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+
 import io.qameta.allure.Feature;
 
 @Feature("OAuth Service")
@@ -80,7 +81,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
   @Rule
   public ExpectedException expected = none();
 
-  private ArgumentCaptor<RequestHandler> requestHandlerCaptor = forClass(RequestHandler.class);
+  private final ArgumentCaptor<RequestHandler> requestHandlerCaptor = forClass(RequestHandler.class);
 
   @Before
   public void before() throws Exception {
@@ -295,7 +296,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
 
     configureRequestHandler(resourceOwner, "");
 
-    assertThat(afterCallbackCalled.get(), is(true));
+    probe(() -> afterCallbackCalled.get());
   }
 
   @Test
@@ -320,7 +321,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
 
     configureRequestHandler(resourceOwner, originalState);
 
-    assertThat(afterCallbackCalled.get(), is(true));
+    probe(() -> afterCallbackCalled.get());
   }
 
   @Test
@@ -345,7 +346,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
 
     configureRequestHandler(resourceOwner, "");
 
-    assertThat(afterCallbackCalled.get(), is(true));
+    probe(() -> afterCallbackCalled.get());
   }
 
   @Test
@@ -370,7 +371,7 @@ public class DancerConfigTestCase extends AbstractOAuthTestCase {
 
     configureRequestHandler(resourceOwner, "");
 
-    assertThat(afterCallbackCalled.get(), is(true));
+    probe(() -> afterCallbackCalled.get());
   }
 
   @Test

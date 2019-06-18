@@ -49,10 +49,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
+import io.qameta.allure.Feature;
 
+@Feature("OAuth Service")
 public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
 
-  private ArgumentCaptor<RequestHandler> localCallbackCaptor = forClass(RequestHandler.class);
+  private final ArgumentCaptor<RequestHandler> localCallbackCaptor = forClass(RequestHandler.class);
 
   @Before
   public void before() {

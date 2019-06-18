@@ -47,6 +47,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
+import io.qameta.allure.Feature;
+
+@Feature("OAuth Service")
 public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
 
   @Test
@@ -92,12 +95,11 @@ public class ClientCredentialsTokenTestCase extends AbstractOAuthTestCase {
     } finally {
       executor.shutdownNow();
     }
-
   }
 
   private static class HttpRequestUrlMatcher extends BaseMatcher<HttpRequest> {
 
-    private URI uri;
+    private final URI uri;
 
     public HttpRequestUrlMatcher(String url) throws URISyntaxException {
       this.uri = new URI("http://host/token");
