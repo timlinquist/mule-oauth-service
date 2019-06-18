@@ -18,7 +18,10 @@ import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.tls.TlsContextFactory;
+import org.mule.runtime.api.util.Pair;
 import org.mule.runtime.http.api.HttpService;
+import org.mule.runtime.http.api.client.HttpClient;
+import org.mule.runtime.http.api.client.proxy.ProxyConfig;
 import org.mule.runtime.http.api.server.HttpServer;
 import org.mule.runtime.http.api.server.HttpServerConfiguration;
 import org.mule.runtime.http.api.server.ServerCreationException;
@@ -40,9 +43,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import com.github.benmanes.caffeine.cache.LoadingCache;
 
 public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDancerBuilder<AuthorizationCodeOAuthDancer>
     implements OAuthAuthorizationCodeDancerBuilder {
+
+  private final HttpService httpService;
 
   private Supplier<HttpServer> localCallbackServerFactory;
   private String localCallbackUrlPath;
@@ -52,7 +58,7 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
 
   private String state;
   private String authorizationUrl;
-  private List<AuthorizationCodeListener> listeners = new LinkedList<>();
+  private final List<AuthorizationCodeListener> listeners = new LinkedList<>();
 
   private Supplier<Map<String, String>> customParameters = () -> emptyMap();
 
@@ -62,8 +68,11 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
 
   public DefaultOAuthAuthorizationCodeDancerBuilder(SchedulerService schedulerService, LockFactory lockProvider,
                                                     Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
-                                                    HttpService httpService, MuleExpressionLanguage expressionEvaluator) {
-    super(lockProvider, tokensStore, httpService, expressionEvaluator);
+                                                    HttpService httpService,
+                                                    LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache,
+                                                    MuleExpressionLanguage expressionEvaluator) {
+    super(lockProvider, tokensStore, httpClientCache, expressionEvaluator);
+    this.httpService = httpService;
     encodeClientCredentialsInBody = true;
   }
 

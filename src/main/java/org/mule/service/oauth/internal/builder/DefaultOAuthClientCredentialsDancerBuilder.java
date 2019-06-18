@@ -11,7 +11,10 @@ import static org.mule.runtime.api.util.Preconditions.checkArgument;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
-import org.mule.runtime.http.api.HttpService;
+import org.mule.runtime.api.tls.TlsContextFactory;
+import org.mule.runtime.api.util.Pair;
+import org.mule.runtime.http.api.client.HttpClient;
+import org.mule.runtime.http.api.client.proxy.ProxyConfig;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
@@ -19,15 +22,16 @@ import org.mule.service.oauth.internal.DefaultClientCredentialsOAuthDancer;
 
 import java.util.Map;
 
+import com.github.benmanes.caffeine.cache.LoadingCache;
 
 public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDancerBuilder<ClientCredentialsOAuthDancer>
     implements OAuthClientCredentialsDancerBuilder {
 
   public DefaultOAuthClientCredentialsDancerBuilder(LockFactory lockProvider,
                                                     Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
-                                                    HttpService httpService,
+                                                    LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache,
                                                     MuleExpressionLanguage expressionEvaluator) {
-    super(lockProvider, tokensStore, httpService, expressionEvaluator);
+    super(lockProvider, tokensStore, httpClientCache, expressionEvaluator);
   }
 
   @Override
