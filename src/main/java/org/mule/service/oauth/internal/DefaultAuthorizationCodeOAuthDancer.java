@@ -42,6 +42,7 @@ import static org.mule.service.oauth.internal.OAuthConstants.REDIRECT_URI_PARAME
 import static org.mule.service.oauth.internal.OAuthConstants.REFRESH_TOKEN_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.STATE_PARAMETER;
 import static org.slf4j.LoggerFactory.getLogger;
+
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.DefaultMuleException;
 import org.mule.runtime.api.exception.MuleException;
@@ -50,6 +51,7 @@ import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.lifecycle.Lifecycle;
 import org.mule.runtime.api.lock.LockFactory;
 import org.mule.runtime.api.metadata.MediaType;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.core.api.util.IOUtils;
 import org.mule.runtime.core.api.util.StringUtils;
@@ -76,8 +78,8 @@ import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.exception.RequestAuthenticationException;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
 import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContextWithRefreshState;
 import org.mule.service.oauth.internal.authorizationcode.AuthorizationRequestUrlBuilder;
 import org.mule.service.oauth.internal.authorizationcode.DefaultAuthorizationCodeRequest;
 import org.mule.service.oauth.internal.state.StateDecoder;
@@ -91,9 +93,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -130,7 +130,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
   private RequestHandlerManager redirectUrlHandlerManager;
   private RequestHandlerManager localAuthorizationUrlHandlerManager;
 
-  public DefaultAuthorizationCodeOAuthDancer(Optional<HttpServer> httpServer, String clientId, String clientSecret,
+  public DefaultAuthorizationCodeOAuthDancer(Optional<HttpServer> httpServer, String name, String clientId, String clientSecret,
                                              String tokenUrl, String scopes, ClientCredentialsLocation clientCredentialsLocation,
                                              String externalCallbackUrl, Charset encoding,
                                              String localCallbackUrlPath, String localAuthorizationUrlPath,
@@ -141,14 +141,16 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                                              Supplier<Map<String, String>> customHeaders,
                                              Map<String, String> customParametersExtractorsExprs,
                                              Function<String, String> resourceOwnerIdTransformer,
-                                             LockFactory lockProvider, Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
+                                             SchedulerService schedulerService, LockFactory lockProvider,
+                                             Map<String, ResourceOwnerOAuthContext> tokensStore,
                                              HttpClient httpClient, MuleExpressionLanguage expressionEvaluator,
                                              Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback,
                                              BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback,
                                              List<AuthorizationCodeListener> listeners) {
-    super(clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
+    super(name, clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
           responseRefreshTokenExpr,
-          responseExpiresInExpr, customParametersExtractorsExprs, resourceOwnerIdTransformer, lockProvider, tokensStore,
+          responseExpiresInExpr, customParametersExtractorsExprs, resourceOwnerIdTransformer, schedulerService, lockProvider,
+          tokensStore,
           httpClient, expressionEvaluator);
 
     this.httpServer = httpServer;
@@ -210,6 +212,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
         });
       }
 
+      @Override
       public ClassLoader getContextClassLoader() {
         return appRegionClassLoader;
       }
@@ -312,8 +315,8 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                   return;
                 }
 
-                final DefaultResourceOwnerOAuthContext resourceOwnerOAuthContext =
-                    (DefaultResourceOwnerOAuthContext) getContextForResourceOwner(resourceOwnerId == null
+                final ResourceOwnerOAuthContextWithRefreshState resourceOwnerOAuthContext =
+                    (ResourceOwnerOAuthContextWithRefreshState) getContextForResourceOwner(resourceOwnerId == null
                         ? DEFAULT_RESOURCE_OWNER_ID
                         : resourceOwnerId);
 
@@ -336,6 +339,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
             });
       }
 
+      @Override
       public ClassLoader getContextClassLoader() {
         return appRegionClassLoader;
       }
@@ -413,6 +417,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
         handleLocalAuthorizationRequest(requestContext.getRequest(), responseCallback);
       }
 
+      @Override
       public ClassLoader getContextClassLoader() {
         return appRegionClassLoader;
       }
@@ -512,8 +517,6 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     return completedFuture(accessToken);
   }
 
-  private static final Map<String, CompletableFuture<Void>> activeRefreshFutures = new ConcurrentHashMap<>();
-
   @Override
   public CompletableFuture<Void> refreshToken(String resourceOwner) {
     return refreshToken(resourceOwner, false);
@@ -524,78 +527,52 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     if (LOGGER.isDebugEnabled()) {
       LOGGER.debug("Executing refresh token for user " + resourceOwner);
     }
-    final DefaultResourceOwnerOAuthContext resourceOwnerOAuthContext =
-        (DefaultResourceOwnerOAuthContext) getContextForResourceOwner(resourceOwner);
 
-    String nullSafeResourceOwner = "" + resourceOwner;
-    CompletableFuture<Void> activeRefreshFuture = activeRefreshFutures.get(nullSafeResourceOwner);
-    if (activeRefreshFuture != null) {
-      return activeRefreshFuture;
-    }
-
-    Lock lock = resourceOwnerOAuthContext.getRefreshUserOAuthContextLock();
-    final boolean lockWasAcquired = lock.tryLock();
-    if (lockWasAcquired) {
-      try {
-        final String userRefreshToken = resourceOwnerOAuthContext.getRefreshToken();
-        if (userRefreshToken == null) {
-          throw new MuleRuntimeException(createStaticMessage(
-                                                             "The user with user id %s has no refresh token in his OAuth state so we can't execute the refresh token call",
-                                                             resourceOwnerOAuthContext.getResourceOwnerId()));
-        }
-
-        final MultiMap<String, String> requestParameters = new MultiMap<>();
-        requestParameters.put(REFRESH_TOKEN_PARAMETER, userRefreshToken);
-        String authorization = handleClientCredentials(requestParameters);
-        requestParameters.put(GRANT_TYPE_PARAMETER, GRANT_TYPE_REFRESH_TOKEN);
-        requestParameters.put(REDIRECT_URI_PARAMETER, externalCallbackUrl);
-
-        MultiMap<String, String> queryParams;
-        Map<String, String> formData;
-
-        if (useQueryParameters) {
-          queryParams = requestParameters;
-          formData = emptyMap();
-        } else {
-          queryParams = emptyMultiMap();
-          formData = requestParameters;
-        }
-
-        CompletableFuture<Void> refreshFuture =
-            invokeTokenUrl(tokenUrl, formData, queryParams, emptyMultiMap(), authorization, true, encoding)
-                .thenAccept(tokenResponse -> {
-                  lock.lock();
-                  try {
-                    withContextClassLoader(DefaultAuthorizationCodeOAuthDancer.class.getClassLoader(), () -> {
-                      if (LOGGER.isDebugEnabled()) {
-                        LOGGER
-                            .debug("Update OAuth Context for resourceOwnerId %s", resourceOwnerOAuthContext.getResourceOwnerId());
-                      }
-                      updateResourceOwnerState(resourceOwnerOAuthContext, null, tokenResponse);
-                      updateResourceOwnerOAuthContext(resourceOwnerOAuthContext);
-                      listeners.forEach(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
-                    });
-                  } finally {
-                    lock.unlock();
-                  }
-                });
-        activeRefreshFutures.put(nullSafeResourceOwner, refreshFuture);
-        refreshFuture.thenRun(() -> activeRefreshFutures.remove(nullSafeResourceOwner, refreshFuture));
-        return refreshFuture;
-      } finally {
-        lock.unlock();
-      }
-    } else {
-      lock.lock();
-      try {
-        return activeRefreshFutures.get(nullSafeResourceOwner);
-      } finally {
-        lock.unlock();
-      }
-    }
+    return doRefreshToken(() -> getContextForResourceOwner(resourceOwner),
+                          ctx -> doRefreshTokenRequest(useQueryParameters, (ResourceOwnerOAuthContextWithRefreshState) ctx));
   }
 
-  private void updateResourceOwnerState(DefaultResourceOwnerOAuthContext resourceOwnerOAuthContext, String newState,
+  protected CompletableFuture<Void> doRefreshTokenRequest(boolean useQueryParameters,
+                                                          final ResourceOwnerOAuthContextWithRefreshState resourceOwnerOAuthContext) {
+    final String userRefreshToken = resourceOwnerOAuthContext.getRefreshToken();
+    if (userRefreshToken == null) {
+      throw new MuleRuntimeException(createStaticMessage(
+                                                         "The user with user id %s has no refresh token in his OAuth state so we can't execute the refresh token call",
+                                                         resourceOwnerOAuthContext.getResourceOwnerId()));
+    }
+
+    final MultiMap<String, String> requestParameters = new MultiMap<>();
+    requestParameters.put(REFRESH_TOKEN_PARAMETER, userRefreshToken);
+    String authorization = handleClientCredentials(requestParameters);
+    requestParameters.put(GRANT_TYPE_PARAMETER, GRANT_TYPE_REFRESH_TOKEN);
+    requestParameters.put(REDIRECT_URI_PARAMETER, externalCallbackUrl);
+
+    MultiMap<String, String> queryParams;
+    Map<String, String> formData;
+
+    if (useQueryParameters) {
+      queryParams = requestParameters;
+      formData = emptyMap();
+    } else {
+      queryParams = emptyMultiMap();
+      formData = requestParameters;
+    }
+
+    return invokeTokenUrl(tokenUrl, formData, queryParams, emptyMultiMap(), authorization, true, encoding)
+        .thenAccept(tokenResponse -> {
+          withContextClassLoader(DefaultAuthorizationCodeOAuthDancer.class.getClassLoader(), () -> {
+            if (LOGGER.isDebugEnabled()) {
+              LOGGER.debug("Update OAuth Context for resourceOwnerId %s", resourceOwnerOAuthContext.getResourceOwnerId());
+            }
+            updateResourceOwnerState(resourceOwnerOAuthContext, null, tokenResponse);
+            updateOAuthContextAfterTokenResponse(resourceOwnerOAuthContext);
+            listeners.forEach(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
+          });
+        })
+        .exceptionally(tokenUrlExceptionHandler(resourceOwnerOAuthContext));
+  }
+
+  private void updateResourceOwnerState(ResourceOwnerOAuthContextWithRefreshState resourceOwnerOAuthContext, String newState,
                                         TokenResponse tokenResponse) {
     resourceOwnerOAuthContext.setAccessToken(tokenResponse.getAccessToken());
     if (tokenResponse.getRefreshToken() != null) {

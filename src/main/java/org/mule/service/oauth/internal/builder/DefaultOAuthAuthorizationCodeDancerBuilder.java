@@ -31,7 +31,6 @@ import org.mule.runtime.oauth.api.AuthorizationCodeRequest;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeDanceCallbackContext;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeListener;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultAuthorizationCodeOAuthDancer;
 
@@ -70,11 +69,11 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
   };
 
   public DefaultOAuthAuthorizationCodeDancerBuilder(SchedulerService schedulerService, LockFactory lockProvider,
-                                                    Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
+                                                    Map<String, ResourceOwnerOAuthContext> tokensStore,
                                                     HttpService httpService,
                                                     LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache,
                                                     MuleExpressionLanguage expressionEvaluator) {
-    super(lockProvider, tokensStore, httpClientCache, expressionEvaluator);
+    super(schedulerService, lockProvider, tokensStore, httpClientCache, expressionEvaluator);
     this.httpService = httpService;
     clientCredentialsLocation = BODY;
   }
@@ -214,14 +213,14 @@ public class DefaultOAuthAuthorizationCodeDancerBuilder extends AbstractOAuthDan
 
     Optional<HttpServer> httpServer = localCallbackServerFactory != null ? of(localCallbackServerFactory.get()) : empty();
 
-    return new DefaultAuthorizationCodeOAuthDancer(httpServer, clientId, clientSecret,
+    return new DefaultAuthorizationCodeOAuthDancer(httpServer, name, clientId, clientSecret,
                                                    tokenUrl, scopes, clientCredentialsLocation, externalCallbackUrl, encoding,
                                                    localCallbackUrlPath, localAuthorizationUrlPath,
                                                    localAuthorizationUrlResourceOwnerId, state,
                                                    authorizationUrl, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParameters, customHeaders,
                                                    customParametersExtractorsExprs,
-                                                   resourceOwnerIdTransformer, lockProvider, tokensStore,
+                                                   resourceOwnerIdTransformer, schedulerService, lockProvider, tokensStore,
                                                    httpClientFactory.get(), expressionEvaluator, beforeDanceCallback,
                                                    afterDanceCallback, listeners);
   }

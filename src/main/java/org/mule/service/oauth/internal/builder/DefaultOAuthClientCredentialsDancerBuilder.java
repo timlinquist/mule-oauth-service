@@ -12,6 +12,7 @@ import static org.mule.runtime.api.util.Preconditions.checkArgument;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.api.util.Pair;
@@ -20,7 +21,7 @@ import org.mule.runtime.http.api.client.proxy.ProxyConfig;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultClientCredentialsOAuthDancer;
 
 import java.util.LinkedList;
@@ -38,11 +39,11 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
   private final MultiMap<String, String> customHeaders = new MultiMap<>();
 
 
-  public DefaultOAuthClientCredentialsDancerBuilder(LockFactory lockProvider,
-                                                    Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
+  public DefaultOAuthClientCredentialsDancerBuilder(SchedulerService schedulerService, LockFactory lockProvider,
+                                                    Map<String, ResourceOwnerOAuthContext> tokensStore,
                                                     LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache,
                                                     MuleExpressionLanguage expressionEvaluator) {
-    super(lockProvider, tokensStore, httpClientCache, expressionEvaluator);
+    super(schedulerService, lockProvider, tokensStore, httpClientCache, expressionEvaluator);
   }
 
   @Override
@@ -88,10 +89,10 @@ public class DefaultOAuthClientCredentialsDancerBuilder extends AbstractOAuthDan
     checkArgument(isNotBlank(clientSecret), "clientSecret cannot be blank");
     checkArgument(isNotBlank(tokenUrl), "tokenUrl cannot be blank");
 
-    return new DefaultClientCredentialsOAuthDancer(clientId, clientSecret, tokenUrl, scopes, clientCredentialsLocation,
+    return new DefaultClientCredentialsOAuthDancer(name, clientId, clientSecret, tokenUrl, scopes, clientCredentialsLocation,
                                                    encoding, responseAccessTokenExpr, responseRefreshTokenExpr,
                                                    responseExpiresInExpr, customParametersExtractorsExprs,
-                                                   resourceOwnerIdTransformer, lockProvider, tokensStore,
+                                                   resourceOwnerIdTransformer, schedulerService, lockProvider, tokensStore,
                                                    httpClientFactory.get(), expressionEvaluator, customParameters,
                                                    customHeaders, listeners);
   }

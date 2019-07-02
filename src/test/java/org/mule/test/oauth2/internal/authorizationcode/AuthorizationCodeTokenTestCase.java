@@ -21,6 +21,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.disposeIfNeeded;
+import static org.mule.runtime.core.api.lifecycle.LifecycleUtils.stopIfNeeded;
 import static org.mule.runtime.http.api.HttpConstants.Method.GET;
 import static org.mule.runtime.http.api.HttpHeaders.Names.AUTHORIZATION;
 import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.BASIC_AUTH_HEADER;
@@ -30,6 +32,7 @@ import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT
 import static org.mule.service.oauth.internal.OAuthConstants.CODE_PARAMETER;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
+import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.client.HttpRequestOptions;
 import org.mule.runtime.http.api.domain.message.request.HttpRequest;
@@ -40,23 +43,62 @@ import org.mule.runtime.http.api.server.async.HttpResponseReadyCallback;
 import org.mule.runtime.oauth.api.AuthorizationCodeOAuthDancer;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
 import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContextWithRefreshState;
 import org.mule.test.oauth.AbstractOAuthTestCase;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 
 import org.apache.commons.io.IOUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.qameta.allure.Feature;
 
 @Feature("OAuth Service")
+@RunWith(Parameterized.class)
 public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AuthorizationCodeTokenTestCase.class);
+
+  @Parameters
+  public static Collection<Object[]> data() {
+    return Arrays.asList(new Object[][] {
+        {(Supplier<ResourceOwnerOAuthContext>) (() -> {
+          final DefaultResourceOwnerOAuthContext context =
+              new DefaultResourceOwnerOAuthContext(new ReentrantLock(), DEFAULT_RESOURCE_OWNER_ID);
+          context.setRefreshToken("refreshToken");
+          return context;
+        })},
+        {(Supplier<ResourceOwnerOAuthContext>) (() -> {
+          final ResourceOwnerOAuthContextWithRefreshState context =
+              new ResourceOwnerOAuthContextWithRefreshState(DEFAULT_RESOURCE_OWNER_ID);
+          context.setRefreshToken("refreshToken");
+          return context;
+        })}
+    });
+  }
+
   private final ArgumentCaptor<RequestHandler> localCallbackCaptor = forClass(RequestHandler.class);
+  private AuthorizationCodeOAuthDancer minimalDancer;
+
+  private final Supplier<ResourceOwnerOAuthContext> contextSupplier;
+
+  public AuthorizationCodeTokenTestCase(Supplier<ResourceOwnerOAuthContext> contextSupplier) {
+    this.contextSupplier = contextSupplier;
+  }
 
   @Before
   public void before() {
@@ -64,6 +106,14 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
         .thenReturn(mock(RequestHandlerManager.class));
     when(httpServer.addRequestHandler(eq(singleton(GET.name())), eq("/auth"), any(RequestHandler.class)))
         .thenReturn(mock(RequestHandlerManager.class));
+  }
+
+  @After
+  public void after() throws MuleException {
+    if (minimalDancer != null) {
+      stopIfNeeded(minimalDancer);
+      disposeIfNeeded(minimalDancer, LOGGER);
+    }
   }
 
   private void assertAuthCodeCredentialsEncodedInHeader(boolean useDeprecatedMethod) throws Exception {
@@ -79,7 +129,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
       builder.withClientCredentialsIn(BASIC_AUTH_HEADER);
     }
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -116,7 +166,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.localAuthorizationUrlPath("/auth");
     builder.clientCredentials("Aladdin", "open sesame");
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -147,7 +197,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
       builder.withClientCredentialsIn(BODY);
     }
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -197,7 +247,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
       builder.withClientCredentialsIn(BASIC_AUTH_HEADER);
     }
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -231,7 +281,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.authorizationUrl("http://host/auth");
     builder.clientCredentials("Aladdin", "open sesame");
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -260,7 +310,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
       builder.withClientCredentialsIn(BODY);
     }
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -294,7 +344,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.authorizationUrl("http://host/auth");
     builder.clientCredentials("Aladdin", "openSesame");
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     minimalDancer.refreshToken(null, true);
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -322,7 +372,7 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
     builder.clientCredentials("Aladdin", "openSesame");
     builder.withClientCredentialsIn(QUERY_PARAMS);
 
-    AuthorizationCodeOAuthDancer minimalDancer = startDancer(builder);
+    minimalDancer = startDancer(builder);
     localCallbackCaptor.getValue().handleRequest(buildLocalCallbackRequestContext(), mock(HttpResponseReadyCallback.class));
 
     ArgumentCaptor<HttpRequest> requestCaptor = forClass(HttpRequest.class);
@@ -342,10 +392,8 @@ public class AuthorizationCodeTokenTestCase extends AbstractOAuthTestCase {
 
   @Override
   protected OAuthAuthorizationCodeDancerBuilder baseAuthCodeDancerbuilder() {
-    DefaultResourceOwnerOAuthContext context =
-        new DefaultResourceOwnerOAuthContext(new ReentrantLock(), DEFAULT_RESOURCE_OWNER_ID);
-    context.setRefreshToken("refreshToken");
-    Map<String, DefaultResourceOwnerOAuthContext> tokensMap = new HashMap<>();
+    ResourceOwnerOAuthContext context = contextSupplier.get();
+    Map<String, ResourceOwnerOAuthContext> tokensMap = new HashMap<>();
     tokensMap.put(DEFAULT_RESOURCE_OWNER_ID, context);
 
     final OAuthAuthorizationCodeDancerBuilder builder =

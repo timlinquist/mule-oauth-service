@@ -15,11 +15,13 @@ import static org.mule.service.oauth.internal.OAuthConstants.GRANT_TYPE_CLIENT_C
 import static org.mule.service.oauth.internal.OAuthConstants.GRANT_TYPE_PARAMETER;
 import static org.mule.service.oauth.internal.OAuthConstants.SCOPE_PARAMETER;
 import static org.slf4j.LoggerFactory.getLogger;
+
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.LifecycleException;
 import org.mule.runtime.api.lifecycle.Startable;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
@@ -28,8 +30,8 @@ import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.exception.RequestAuthenticationException;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
 import org.mule.runtime.oauth.api.exception.TokenUrlResponseException;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContextWithRefreshState;
 
 import java.nio.charset.Charset;
 import java.util.HashMap;
@@ -39,8 +41,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
@@ -55,22 +55,24 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
   private static final Logger LOGGER = getLogger(DefaultClientCredentialsOAuthDancer.class);
 
   private boolean accessTokenRefreshedOnStart = false;
-  private MultiMap<String, String> customParameters;
-  private MultiMap<String, String> customHeaders;
+  private final MultiMap<String, String> customParameters;
+  private final MultiMap<String, String> customHeaders;
   private final List<ClientCredentialsListener> listeners;
 
-  public DefaultClientCredentialsOAuthDancer(String clientId, String clientSecret, String tokenUrl, String scopes,
+  public DefaultClientCredentialsOAuthDancer(String name, String clientId, String clientSecret, String tokenUrl, String scopes,
                                              ClientCredentialsLocation clientCredentialsLocation, Charset encoding,
                                              String responseAccessTokenExpr, String responseRefreshTokenExpr,
                                              String responseExpiresInExpr, Map<String, String> customParametersExprs,
-                                             Function<String, String> resourceOwnerIdTransformer, LockFactory lockProvider,
-                                             Map<String, DefaultResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
+                                             Function<String, String> resourceOwnerIdTransformer,
+                                             SchedulerService schedulerService, LockFactory lockProvider,
+                                             Map<String, ResourceOwnerOAuthContext> tokensStore, HttpClient httpClient,
                                              MuleExpressionLanguage expressionEvaluator,
                                              MultiMap<String, String> customParameters,
                                              MultiMap<String, String> customHeaders,
                                              List<ClientCredentialsListener> listeners) {
-    super(clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
-          responseRefreshTokenExpr, responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, lockProvider,
+    super(name, clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
+          responseRefreshTokenExpr, responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, schedulerService,
+          lockProvider,
           tokensStore, httpClient,
           expressionEvaluator);
 
@@ -87,11 +89,6 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
   @Override
   public void start() throws MuleException {
     super.start();
-    // We use a reentrant instead of one from the lock factory because the local state of this object cannot be shared in the
-    // cluster.
-    // For this to work within a cluster we would need some notifications mechanism from the object store to know when a token
-    // was refreshed in another node.
-    refreshTokenLock = new ReentrantLock();
     try {
       refreshToken().get();
       accessTokenRefreshedOnStart = true;
@@ -118,40 +115,25 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
     final String accessToken = getContext().getAccessToken();
     if (accessToken == null) {
       LOGGER.info("Previously stored token has been invalidated. Refreshing...");
-      return doRefreshToken(false).thenApply(v -> getContext().getAccessToken());
+      return doRefreshTokenRequest(false).thenApply(v -> getContext().getAccessToken());
     }
 
     // TODO MULE-11858 proactively refresh if the token has already expired based on its 'expiresIn' parameter
     return completedFuture(accessToken);
   }
 
-  private volatile CompletableFuture<Void> lastRefreshTokenFuture;
-  private Lock refreshTokenLock;
-
   @Override
   public CompletableFuture<Void> refreshToken() {
-    return doRefreshToken(true);
-  }
-
-  private CompletableFuture<Void> doRefreshToken(boolean notifyListeners) {
-    if (refreshTokenLock.tryLock()) {
-      try {
-        lastRefreshTokenFuture = doRefreshTokenRequest(notifyListeners);
-        return lastRefreshTokenFuture;
-      } finally {
-        refreshTokenLock.unlock();
-      }
-    } else {
-      refreshTokenLock.lock();
-      try {
-        return lastRefreshTokenFuture;
-      } finally {
-        refreshTokenLock.unlock();
-      }
-    }
+    return doRefreshTokenRequest(true);
   }
 
   private CompletableFuture<Void> doRefreshTokenRequest(boolean notifyListeners) {
+    return doRefreshToken(() -> getContext(),
+                          ctx -> doRefreshTokenRequest(notifyListeners, (ResourceOwnerOAuthContextWithRefreshState) ctx));
+  }
+
+  private CompletableFuture<Void> doRefreshTokenRequest(boolean notifyListeners,
+                                                        ResourceOwnerOAuthContextWithRefreshState defaultUserState) {
     final Map<String, String> formData = new HashMap<>();
 
     formData.put(GRANT_TYPE_PARAMETER, GRANT_TYPE_CLIENT_CREDENTIALS);
@@ -168,7 +150,6 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
                            tokenResponse.getAccessToken(), tokenResponse.getRefreshToken(), tokenResponse.getExpiresIn());
             }
 
-            final DefaultResourceOwnerOAuthContext defaultUserState = (DefaultResourceOwnerOAuthContext) getContext();
             defaultUserState.setAccessToken(tokenResponse.getAccessToken());
             defaultUserState.setExpiresIn(tokenResponse.getExpiresIn());
             for (Entry<String, Object> customResponseParameterEntry : tokenResponse.getCustomResponseParameters().entrySet()) {
@@ -176,12 +157,13 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
                                                                 customResponseParameterEntry.getValue());
             }
 
-            updateResourceOwnerOAuthContext(defaultUserState);
+            updateOAuthContextAfterTokenResponse(defaultUserState);
             if (notifyListeners) {
               listeners.forEach(l -> l.onTokenRefreshed(defaultUserState));
             }
           });
-        });
+        })
+        .exceptionally(tokenUrlExceptionHandler(defaultUserState));
   }
 
   @Override
