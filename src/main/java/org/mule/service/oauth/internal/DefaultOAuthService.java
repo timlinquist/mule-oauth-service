@@ -24,7 +24,7 @@ import org.mule.runtime.http.api.domain.message.response.HttpResponse;
 import org.mule.runtime.oauth.api.OAuthService;
 import org.mule.runtime.oauth.api.builder.OAuthAuthorizationCodeDancerBuilder;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.builder.DefaultOAuthAuthorizationCodeDancerBuilder;
 import org.mule.service.oauth.internal.builder.DefaultOAuthClientCredentialsDancerBuilder;
 
@@ -96,8 +96,8 @@ public final class DefaultOAuthService implements OAuthService {
   public <T> OAuthClientCredentialsDancerBuilder clientCredentialsGrantTypeDancerBuilder(LockFactory lockProvider,
                                                                                          Map<String, T> tokensStore,
                                                                                          MuleExpressionLanguage expressionEvaluator) {
-    return new DefaultOAuthClientCredentialsDancerBuilder(lockProvider,
-                                                          (Map<String, DefaultResourceOwnerOAuthContext>) tokensStore,
+    return new DefaultOAuthClientCredentialsDancerBuilder(schedulerService, lockProvider,
+                                                          (Map<String, ResourceOwnerOAuthContext>) tokensStore,
                                                           httpClientCache, expressionEvaluator);
   }
 
@@ -106,7 +106,7 @@ public final class DefaultOAuthService implements OAuthService {
                                                                                          Map<String, T> tokensStore,
                                                                                          MuleExpressionLanguage expressionEvaluator) {
     return new DefaultOAuthAuthorizationCodeDancerBuilder(schedulerService, lockProvider,
-                                                          (Map<String, DefaultResourceOwnerOAuthContext>) tokensStore,
+                                                          (Map<String, ResourceOwnerOAuthContext>) tokensStore,
                                                           httpService, httpClientCache, expressionEvaluator);
   }
 }

@@ -12,6 +12,7 @@ import static org.mule.runtime.oauth.api.builder.ClientCredentialsLocation.BODY;
 
 import org.mule.runtime.api.el.MuleExpressionLanguage;
 import org.mule.runtime.api.lock.LockFactory;
+import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.tls.TlsContextFactory;
 import org.mule.runtime.api.util.Pair;
 import org.mule.runtime.http.api.client.HttpClient;
@@ -21,7 +22,7 @@ import org.mule.runtime.http.api.domain.message.request.HttpRequest;
 import org.mule.runtime.http.api.domain.message.response.HttpResponse;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.builder.OAuthDancerBuilder;
-import org.mule.runtime.oauth.api.state.DefaultResourceOwnerOAuthContext;
+import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -35,10 +36,13 @@ import com.github.benmanes.caffeine.cache.LoadingCache;
 
 public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilder<D> {
 
+  protected final SchedulerService schedulerService;
   protected final LockFactory lockProvider;
-  protected final Map<String, DefaultResourceOwnerOAuthContext> tokensStore;
+  protected final Map<String, ResourceOwnerOAuthContext> tokensStore;
   protected final LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache;
   protected final MuleExpressionLanguage expressionEvaluator;
+
+  protected String name = toString();
 
   protected String clientId;
   protected String clientSecret;
@@ -54,14 +58,21 @@ public abstract class AbstractOAuthDancerBuilder<D> implements OAuthDancerBuilde
   protected Map<String, String> customParametersExtractorsExprs;
   protected Function<String, String> resourceOwnerIdTransformer = resourceOwnerId -> resourceOwnerId;
 
-  public AbstractOAuthDancerBuilder(LockFactory lockProvider,
-                                    Map<String, DefaultResourceOwnerOAuthContext> tokensStore,
+  public AbstractOAuthDancerBuilder(SchedulerService schedulerService, LockFactory lockProvider,
+                                    Map<String, ResourceOwnerOAuthContext> tokensStore,
                                     LoadingCache<Pair<TlsContextFactory, ProxyConfig>, HttpClient> httpClientCache,
                                     MuleExpressionLanguage expressionEvaluator) {
+    this.schedulerService = schedulerService;
     this.lockProvider = lockProvider;
     this.tokensStore = tokensStore;
     this.httpClientCache = httpClientCache;
     this.expressionEvaluator = expressionEvaluator;
+  }
+
+  @Override
+  public OAuthDancerBuilder<D> name(String name) {
+    this.name = name;
+    return this;
   }
 
   @Override
