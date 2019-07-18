@@ -19,7 +19,7 @@ import org.mule.runtime.api.util.Pair;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.http.api.client.proxy.ProxyConfig;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
-import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
+import org.mule.runtime.oauth.api.listener.ClientCredentialsListener;
 import org.mule.runtime.oauth.api.builder.OAuthClientCredentialsDancerBuilder;
 import org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext;
 import org.mule.service.oauth.internal.DefaultClientCredentialsOAuthDancer;

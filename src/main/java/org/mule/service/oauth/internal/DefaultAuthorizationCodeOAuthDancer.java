@@ -16,7 +16,6 @@ import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.metadata.MediaType.ANY;
 import static org.mule.runtime.api.metadata.MediaType.parse;
 import static org.mule.runtime.api.util.MultiMap.emptyMultiMap;
-import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.core.api.util.StringUtils.isBlank;
 import static org.mule.runtime.http.api.HttpConstants.HttpStatus.BAD_REQUEST;
@@ -73,7 +72,7 @@ import org.mule.runtime.http.api.server.async.ResponseStatusCallback;
 import org.mule.runtime.oauth.api.AuthorizationCodeOAuthDancer;
 import org.mule.runtime.oauth.api.AuthorizationCodeRequest;
 import org.mule.runtime.oauth.api.builder.AuthorizationCodeDanceCallbackContext;
-import org.mule.runtime.oauth.api.builder.AuthorizationCodeListener;
+import org.mule.runtime.oauth.api.listener.AuthorizationCodeListener;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.exception.RequestAuthenticationException;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
@@ -93,8 +92,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -125,7 +124,6 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
 
   private final Function<AuthorizationCodeRequest, AuthorizationCodeDanceCallbackContext> beforeDanceCallback;
   private final BiConsumer<AuthorizationCodeDanceCallbackContext, ResourceOwnerOAuthContext> afterDanceCallback;
-  private final List<AuthorizationCodeListener> listeners;
 
   private RequestHandlerManager redirectUrlHandlerManager;
   private RequestHandlerManager localAuthorizationUrlHandlerManager;
@@ -151,7 +149,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
           responseRefreshTokenExpr,
           responseExpiresInExpr, customParametersExtractorsExprs, resourceOwnerIdTransformer, schedulerService, lockProvider,
           tokensStore,
-          httpClient, expressionEvaluator);
+          httpClient, expressionEvaluator, listeners);
 
     this.httpServer = httpServer;
     this.localCallbackUrlPath = localCallbackUrlPath;
@@ -165,12 +163,6 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
 
     this.beforeDanceCallback = beforeDanceCallback;
     this.afterDanceCallback = afterDanceCallback;
-
-    if (listeners != null) {
-      this.listeners = new CopyOnWriteArrayList<>(listeners);
-    } else {
-      this.listeners = new CopyOnWriteArrayList<>();
-    }
   }
 
   @Override
@@ -184,14 +176,12 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
 
   @Override
   public void addListener(AuthorizationCodeListener listener) {
-    checkArgument(listener != null, "Cannot add a null listener");
-    listeners.add(listener);
+    doAddListener(listener);
   }
 
   @Override
   public void removeListener(AuthorizationCodeListener listener) {
-    checkArgument(listener != null, "Cannot remove a null listener");
-    listeners.remove(listener);
+    doRemoveListener(listener);
   }
 
   private static RequestHandlerManager addRequestHandler(HttpServer server, Method method, String path,
@@ -330,7 +320,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
                 updateResourceOwnerState(resourceOwnerOAuthContext, stateDecoder.decodeOriginalState(), tokenResponse);
                 updateResourceOwnerOAuthContext(resourceOwnerOAuthContext);
 
-                listeners.forEach(l -> l.onAuthorizationCompleted(resourceOwnerOAuthContext));
+                forEachListener(l -> l.onAuthorizationCompleted(resourceOwnerOAuthContext));
                 afterDanceCallback.accept(beforeCallbackContext, resourceOwnerOAuthContext);
 
                 sendResponse(stateDecoder, responseCallback, OK, "Successfully retrieved access token",
@@ -566,7 +556,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
             }
             updateResourceOwnerState(resourceOwnerOAuthContext, null, tokenResponse);
             updateOAuthContextAfterTokenResponse(resourceOwnerOAuthContext);
-            listeners.forEach(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
+            forEachListener(l -> l.onTokenRefreshed(resourceOwnerOAuthContext));
           });
         })
         .exceptionally(tokenUrlExceptionHandler(resourceOwnerOAuthContext));
@@ -602,4 +592,7 @@ public class DefaultAuthorizationCodeOAuthDancer extends AbstractOAuthDancer imp
     }
   }
 
+  private void forEachListener(Consumer<AuthorizationCodeListener> action) {
+    onEachListener(l -> action.accept((AuthorizationCodeListener) l));
+  }
 }
