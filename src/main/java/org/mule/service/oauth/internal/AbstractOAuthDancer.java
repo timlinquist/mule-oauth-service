@@ -124,6 +124,9 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
   private final MuleExpressionLanguage expressionEvaluator;
   private Scheduler pollScheduler;
 
+  /**
+   * @deprecated since 4.2.2 - 4.3.0. Use {@link #AbstractOAuthDancer(String, String, String, String, Charset, String, ClientCredentialsLocation, String, String, String, Map, Function, SchedulerService, LockFactory, Map, HttpClient, MuleExpressionLanguage, List)}
+   */
   @Deprecated
   protected AbstractOAuthDancer(String name, String clientId, String clientSecret, String tokenUrl, Charset encoding,
                                 String scopes, ClientCredentialsLocation clientCredentialsLocation,
