@@ -8,7 +8,6 @@ package org.mule.service.oauth.internal;
 
 import static java.lang.Thread.currentThread;
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static org.mule.runtime.api.util.Preconditions.checkArgument;
 import static org.mule.runtime.core.api.util.ClassUtils.withContextClassLoader;
 import static org.mule.runtime.oauth.api.state.ResourceOwnerOAuthContext.DEFAULT_RESOURCE_OWNER_ID;
 import static org.mule.service.oauth.internal.OAuthConstants.GRANT_TYPE_CLIENT_CREDENTIALS;
@@ -25,7 +24,7 @@ import org.mule.runtime.api.scheduler.SchedulerService;
 import org.mule.runtime.api.util.MultiMap;
 import org.mule.runtime.http.api.client.HttpClient;
 import org.mule.runtime.oauth.api.ClientCredentialsOAuthDancer;
-import org.mule.runtime.oauth.api.builder.ClientCredentialsListener;
+import org.mule.runtime.oauth.api.listener.ClientCredentialsListener;
 import org.mule.runtime.oauth.api.builder.ClientCredentialsLocation;
 import org.mule.runtime.oauth.api.exception.RequestAuthenticationException;
 import org.mule.runtime.oauth.api.exception.TokenNotFoundException;
@@ -39,8 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.slf4j.Logger;
@@ -57,7 +56,6 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
   private boolean accessTokenRefreshedOnStart = false;
   private final MultiMap<String, String> customParameters;
   private final MultiMap<String, String> customHeaders;
-  private final List<ClientCredentialsListener> listeners;
 
   public DefaultClientCredentialsOAuthDancer(String name, String clientId, String clientSecret, String tokenUrl, String scopes,
                                              ClientCredentialsLocation clientCredentialsLocation, Charset encoding,
@@ -72,18 +70,10 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
                                              List<ClientCredentialsListener> listeners) {
     super(name, clientId, clientSecret, tokenUrl, encoding, scopes, clientCredentialsLocation, responseAccessTokenExpr,
           responseRefreshTokenExpr, responseExpiresInExpr, customParametersExprs, resourceOwnerIdTransformer, schedulerService,
-          lockProvider,
-          tokensStore, httpClient,
-          expressionEvaluator);
+          lockProvider, tokensStore, httpClient, expressionEvaluator, listeners);
 
     this.customParameters = customParameters;
     this.customHeaders = customHeaders;
-
-    if (listeners != null) {
-      this.listeners = new CopyOnWriteArrayList<>(listeners);
-    } else {
-      this.listeners = new CopyOnWriteArrayList<>();
-    }
   }
 
   @Override
@@ -159,7 +149,7 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
 
             updateOAuthContextAfterTokenResponse(defaultUserState);
             if (notifyListeners) {
-              listeners.forEach(l -> l.onTokenRefreshed(defaultUserState));
+              forEachListener(l -> l.onTokenRefreshed(defaultUserState));
             }
           });
         })
@@ -168,14 +158,12 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
 
   @Override
   public void addListener(ClientCredentialsListener listener) {
-    checkArgument(listener != null, "Cannot add a null listener");
-    listeners.add(listener);
+    doAddListener(listener);
   }
 
   @Override
   public void removeListener(ClientCredentialsListener listener) {
-    checkArgument(listener != null, "Cannot remove a null listener");
-    listeners.remove(listener);
+    doRemoveListener(listener);
   }
 
   @Override
@@ -188,4 +176,7 @@ public class DefaultClientCredentialsOAuthDancer extends AbstractOAuthDancer imp
     return getContextForResourceOwner(DEFAULT_RESOURCE_OWNER_ID);
   }
 
+  private void forEachListener(Consumer<ClientCredentialsListener> action) {
+    onEachListener(listener -> action.accept((ClientCredentialsListener) listener));
+  }
 }
