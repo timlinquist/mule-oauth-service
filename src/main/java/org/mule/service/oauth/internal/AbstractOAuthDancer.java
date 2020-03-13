@@ -475,7 +475,7 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
 
   public void invalidateContext(String resourceOwner) {
     final Lock refreshUserOAuthContextLock =
-        getRefreshUserOAuthContextLock(getContextForResourceOwner(resourceOwner), resourceOwner, getLockProvider());
+        getRefreshUserOAuthContextLock(getContextForResourceOwner(resourceOwner), name, getLockProvider());
     refreshUserOAuthContextLock.lock();
     try {
       tokensStore.remove(resourceOwnerIdTransformer.apply(resourceOwner));
@@ -499,25 +499,28 @@ public abstract class AbstractOAuthDancer implements Startable, Stoppable {
 
     final String transformedResourceOwnerId = resourceOwnerIdTransformer.apply(resourceOwnerId);
 
-    ResourceOwnerOAuthContext resourceOwnerOAuthContext = null;
-    if (!tokensStore.containsKey(transformedResourceOwnerId)) {
-      final Lock lock = createRefreshUserOAuthContextLock(name, lockProvider, resourceOwnerId);
-      lock.lock();
-      try {
-        if (!tokensStore.containsKey(transformedResourceOwnerId)) {
-          resourceOwnerOAuthContext = createResourceOwnerOAuthContext(lock, resourceOwnerId);
-          tokensStore.put(transformedResourceOwnerId, resourceOwnerOAuthContext);
-        }
-      } finally {
-        lock.unlock();
-      }
-    }
-    if (resourceOwnerOAuthContext == null) {
-      resourceOwnerOAuthContext = tokensStore.get(transformedResourceOwnerId);
+    ResourceOwnerOAuthContext resourceOwnerOAuthContext = tokensStore.get(transformedResourceOwnerId);
+    if (resourceOwnerOAuthContext != null) {
       if (resourceOwnerOAuthContext instanceof DefaultResourceOwnerOAuthContext) {
-        resourceOwnerOAuthContext = migrateContextIfNeeded(resourceOwnerOAuthContext, name, lockProvider);
+        return migrateContextIfNeeded(resourceOwnerOAuthContext, name, lockProvider);
+      } else {
+        return resourceOwnerOAuthContext;
       }
     }
+
+    final Lock lock = createRefreshUserOAuthContextLock(name, lockProvider, resourceOwnerId);
+    lock.lock();
+    try {
+      if (!tokensStore.containsKey(transformedResourceOwnerId)) {
+        resourceOwnerOAuthContext = createResourceOwnerOAuthContext(lock, resourceOwnerId);
+        tokensStore.put(transformedResourceOwnerId, resourceOwnerOAuthContext);
+      } else {
+        resourceOwnerOAuthContext = tokensStore.get(transformedResourceOwnerId);
+      }
+    } finally {
+      lock.unlock();
+    }
+
     return resourceOwnerOAuthContext;
   }
 
