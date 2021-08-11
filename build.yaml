@@ -3,3 +3,4 @@ upstreamProjects:
   Mule-runtime/mule-oauth-client/master
 mavenSettingsXmlId: mule-runtime-maven-settings-MuleSettings
 projectType: runtime
+devBranchesRegex: "2\\.1\\.0"
