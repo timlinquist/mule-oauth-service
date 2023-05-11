@@ -19,7 +19,7 @@
         <caffeineVersion>2.8.0</caffeineVersion>
 
         <formatterConfigPath>formatter.xml</formatterConfigPath>
-        <muleOAuthClientVersion>1.2.0-SNAPSHOT</muleOAuthClientVersion>
+        <muleOAuthClientVersion>2.0.0-SNAPSHOT</muleOAuthClientVersion>
     </properties>
 
     <scm>
@@ -45,6 +45,12 @@
                 <groupId>org.mule.commons</groupId>
                 <artifactId>mule-oauth-client</artifactId>
                 <version>${muleOAuthClientVersion}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mule.commons</groupId>
+                <artifactId>mule-oauth-client-api</artifactId>
+                <version>${muleOAuthClientVersion}</version>
+                <scope>provided</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
