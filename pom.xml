@@ -4,7 +4,7 @@
     <parent>
         <groupId>org.mule.services</groupId>
         <artifactId>mule-core-services-parent</artifactId>
-        <version>1.5.3-SNAPSHOT</version>
+        <version>1.5.4-SNAPSHOT</version>
     </parent>
 
     <name>OAuth Service Implementation</name>
@@ -12,13 +12,13 @@
 
     <artifactId>mule-service-oauth</artifactId>
     <packaging>mule-service</packaging>
-    <version>2.2.1-SNAPSHOT</version>
+    <version>2.2.2-SNAPSHOT</version>
 
     <properties>
         <javaModuleName>org.mule.service.oauth</javaModuleName>
 
         <caffeineVersion>2.8.0</caffeineVersion>
-        <muleOAuthClientVersion>2.0.1-SNAPSHOT</muleOAuthClientVersion>
+        <muleOAuthClientVersion>2.0.2-SNAPSHOT</muleOAuthClientVersion>
 
         <skipExportTests>false</skipExportTests>
         <formatterConfigPath>formatter.xml</formatterConfigPath>
