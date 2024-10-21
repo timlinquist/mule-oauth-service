@@ -30,6 +30,6 @@ module org.mule.service.oauth {
       org.mule.runtime.service;
 
   exports org.mule.service.oauth.internal to
-      com.mulesoft.mule.service.oauth.ee;
+      com.mulesoft.mule.service.oauth.ee, org.mule.test.service.oauth, com.mulesoft.mule.test.service.oauth.ee, com.mulesoft.test.mule.service.oauth.ee;
 
 }
