@@ -13,7 +13,7 @@ import org.mule.api.annotation.jpms.ServiceModule;
  * @since 2.2
  */
 @ServiceModule
-module org.mule.service.oauth {
+module org.mule.test.service.oauth {
 
   requires org.mule.oauth.client.api;
   requires org.mule.oauth.client.impl;
@@ -23,15 +23,11 @@ module org.mule.service.oauth {
 
   requires java.inject;
 
-  // Allow invocation and injection into providers by the Mule Runtime
-  exports org.mule.service.oauth.provider to
-      org.mule.runtime.service;
-  opens org.mule.service.oauth.provider to
-      org.mule.runtime.service;
+  requires org.mule.service.oauth;
+  requires org.hamcrest;
+  requires org.mockito;
+  requires junit;
+  requires io.qameta.allure.commons;
 
-  exports org.mule.service.oauth.internal to
-      com.mulesoft.mule.service.oauth.ee,
-      org.mule.test.service.oauth,
-      com.mulesoft.test.mule.service.oauth.ee;
-
+  exports org.mule.test.oauth.internal to junit;
 }
